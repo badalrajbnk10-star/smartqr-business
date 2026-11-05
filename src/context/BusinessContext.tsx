@@ -74,143 +74,24 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (isDemoMode) {
         const cached = localStorage.getItem(`${LOCAL_BUSINESSES_KEY}_${user.id}`);
         if (cached) {
-          const parsed = JSON.parse(cached);
-          setBusinesses(parsed);
-          setCurrentBusiness(parsed[0] || null);
-          if (parsed[0]?.subscription) {
-            setSubscription(parsed[0].subscription);
+          const parsed: Business[] = JSON.parse(cached);
+          // Purge old mock initialBiz if present for clean owner experience
+          const filtered = parsed.filter(b => b.id !== 'biz-hotel-grand-1');
+          setBusinesses(filtered);
+          setCurrentBusiness(filtered[0] || null);
+          if (filtered[0]?.subscription) {
+            setSubscription(filtered[0].subscription);
+          } else {
+            setSubscription(null);
           }
         } else {
-          // Create initial starter demo business for new owner
-          const trialExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-          const demoSub: Subscription = {
-            id: 'sub-demo-1',
-            business_owner_id: user.id,
-            plan_id: 'plan-starter',
-            status: 'trialing',
-            trial_started_at: new Date().toISOString(),
-            trial_expires_at: trialExpires,
-            autopay_mandate_status: 'pending',
-            cancel_at_period_end: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            plan: DEFAULT_PLANS[0],
-          };
-
-          const initialBiz: Business = {
-            id: 'biz-hotel-grand-1',
-            owner_id: user.id,
-            name: 'The Grand Heritage Hotel & Dine',
-            slug: 'grand-heritage',
-            short_description: 'Luxury Stays, Fine Dining & Authentic Indian Cuisine',
-            full_description: 'Welcome to The Grand Heritage Hotel & Dine. We offer world-class hospitality, ambient dining, free high-speed Wi-Fi, and banquet spaces for weddings and corporate gatherings.',
-            phone: '+91 9931782577',
-            whatsapp: '+91 9931782577',
-            email: 'contact.badalsarkar@gmail.com',
-            address: '42, Station Road, Near Central Plaza, Sector 14',
-            city: 'New Delhi',
-            state: 'Delhi',
-            pincode: '110001',
-            google_maps_url: 'https://maps.google.com/?q=New+Delhi',
-            google_review_url: 'https://g.page/r/review/grand-heritage',
-            is_active: true,
-            status: 'trialing',
-            logo_url: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200&auto=format&fit=crop&q=80',
-            banner_url: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=1200&auto=format&fit=crop&q=80',
-            opening_hours: {
-              monday: { open: '08:00', close: '23:00', closed: false },
-              tuesday: { open: '08:00', close: '23:00', closed: false },
-              wednesday: { open: '08:00', close: '23:00', closed: false },
-              thursday: { open: '08:00', close: '23:00', closed: false },
-              friday: { open: '08:00', close: '23:00', closed: false },
-              saturday: { open: '08:00', close: '23:00', closed: false },
-              sunday: { open: '08:00', close: '23:00', closed: false },
-            },
-            menu_items: [
-              {
-                id: 'm1',
-                name: 'Paneer Butter Masala',
-                price: 320,
-                description: 'Rich cottage cheese cubes simmered in creamy tomato cashew gravy',
-                category: 'Main Course',
-                is_available: true,
-              },
-              {
-                id: 'm2',
-                name: 'Tandoori Garlic Naan',
-                price: 65,
-                description: 'Fresh clay-oven bread with roasted garlic and butter glaze',
-                category: 'Breads',
-                is_available: true,
-              },
-              {
-                id: 'm3',
-                name: 'Gulab Jamun with Ice Cream',
-                price: 150,
-                description: 'Warm syrup-soaked dumplings paired with Madagascar vanilla',
-                category: 'Desserts',
-                is_available: true,
-              }
-            ],
-            services: [
-              {
-                id: 's1',
-                name: 'Executive Deluxe Suite',
-                price: 3500,
-                duration: 'Per Night',
-                description: 'King bed, balcony view, buffet breakfast and luxury toiletries included.',
-              },
-              {
-                id: 's2',
-                name: 'Banquet Hall Reservation',
-                price: 25000,
-                duration: '4 Hours',
-                description: 'Capacity for up to 150 guests with sound system and decor.',
-              }
-            ],
-            photos: [
-              {
-                id: 'p1',
-                business_id: 'biz-hotel-grand-1',
-                photo_url: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&auto=format&fit=crop&q=80',
-                caption: 'Luxury Suite Living Area',
-                sort_order: 1,
-                created_at: new Date().toISOString(),
-              },
-              {
-                id: 'p2',
-                business_id: 'biz-hotel-grand-1',
-                photo_url: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&auto=format&fit=crop&q=80',
-                caption: 'Courtyard Fine Dining',
-                sort_order: 2,
-                created_at: new Date().toISOString(),
-              }
-            ],
-            qr_code: {
-              id: 'qr-1',
-              business_id: 'biz-hotel-grand-1',
-              permanent_code: 'grand-heritage',
-              permanent_url: `${window.location.origin}/b/grand-heritage`,
-              foreground_color: '#1E1B4B',
-              background_color: '#FFFFFF',
-              frame_type: 'table_tent',
-              custom_text: 'SCAN FOR DIGITAL MENU & GOOGLE REVIEWS',
-              total_scans: 148,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            },
-            subscription: demoSub,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-
-          setBusinesses([initialBiz]);
-          setCurrentBusiness(initialBiz);
-          setSubscription(demoSub);
-          localStorage.setItem(`${LOCAL_BUSINESSES_KEY}_${user.id}`, JSON.stringify([initialBiz]));
+          // Fresh new owner has 0 businesses initially
+          setBusinesses([]);
+          setCurrentBusiness(null);
+          setSubscription(null);
         }
       } else {
-        // Fetch from Supabase
+        // Fetch real businesses from Supabase Cloud
         const { data: bizList, error } = await supabase
           .from('businesses')
           .select(`
@@ -222,14 +103,24 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           `)
           .eq('owner_id', user.id);
 
-        if (error) throw error;
-
-        if (bizList && bizList.length > 0) {
+        if (error) {
+          console.error('Error fetching businesses from Supabase:', error);
+          setBusinesses([]);
+          setCurrentBusiness(null);
+          setSubscription(null);
+        } else if (bizList && bizList.length > 0) {
           setBusinesses(bizList);
           setCurrentBusiness(bizList[0]);
           if (bizList[0].subscription) {
             setSubscription(bizList[0].subscription);
+          } else {
+            setSubscription(null);
           }
+        } else {
+          // No business created yet in database
+          setBusinesses([]);
+          setCurrentBusiness(null);
+          setSubscription(null);
         }
       }
     } catch (err) {

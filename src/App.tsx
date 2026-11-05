@@ -22,6 +22,7 @@ import { Support } from './pages/public/Support';
 import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
 import { ForgotPassword } from './pages/auth/ForgotPassword';
+import { ResetPassword } from './pages/auth/ResetPassword';
 
 // Customer Page (Dynamic QR Target)
 import { CustomerLandingPage } from './pages/customer/CustomerLandingPage';
@@ -90,6 +91,7 @@ export const App: React.FC = () => {
             <Route path="/login" element={<PublicLayout><Login /></PublicLayout>} />
             <Route path="/register" element={<PublicLayout><Register /></PublicLayout>} />
             <Route path="/forgot-password" element={<PublicLayout><ForgotPassword /></PublicLayout>} />
+            <Route path="/reset-password" element={<PublicLayout><ResetPassword /></PublicLayout>} />
 
             {/* Customer Digital Profile (Scanned from Dynamic QR) */}
             <Route path="/b/:slug" element={<CustomerLandingPage />} />

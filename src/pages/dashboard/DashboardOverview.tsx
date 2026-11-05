@@ -32,39 +32,77 @@ export const DashboardOverview: React.FC = () => {
           <div className="space-y-2 max-w-xl">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-semibold">
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>SmartQR Digital Profile Active</span>
+              <span>SmartQR Digital Profile Portal</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Welcome back, {currentBusiness?.name || 'Business Owner'}!
+              Welcome{currentBusiness?.name ? `, ${currentBusiness.name}` : ''}!
             </h1>
             <p className="text-xs sm:text-sm text-brand-100 leading-relaxed">
-              Your dynamic QR code is live. Customers scanning your QR can instantly view your profile, contact you on WhatsApp, and leave 5-star Google Reviews.
+              {currentBusiness
+                ? 'Your dynamic QR code is live. Customers scanning your QR can instantly view your profile, contact you on WhatsApp, and leave 5-star Google Reviews.'
+                : 'Welcome to your SmartQR business management dashboard. Get started by setting up your business profile and dynamic QR code below.'}
             </p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-            {currentBusiness && (
-              <a
-                href={`/b/${currentBusiness.slug}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white text-brand-700 font-bold text-xs shadow-md hover:bg-brand-50 transition-all"
+            {currentBusiness ? (
+              <>
+                <a
+                  href={`/b/${currentBusiness.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white text-brand-700 font-bold text-xs shadow-md hover:bg-brand-50 transition-all"
+                >
+                  <Eye className="w-4 h-4" />
+                  <span>View Customer Profile</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                <Link
+                  to="/dashboard/qr"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-brand-900/60 hover:bg-brand-900 text-white font-bold text-xs border border-white/20 transition-all"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print QR Stand</span>
+                </Link>
+              </>
+            ) : (
+              <Link
+                to="/dashboard/profile"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-white text-brand-700 font-bold text-xs shadow-md hover:bg-brand-50 transition-all"
               >
-                <Eye className="w-4 h-4" />
-                <span>View Customer Profile</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                <span>Create Business Profile</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
             )}
-            <Link
-              to="/dashboard/qr"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-brand-900/60 hover:bg-brand-900 text-white font-bold text-xs border border-white/20 transition-all"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print QR Stand</span>
-            </Link>
           </div>
         </div>
       </div>
+
+      {/* If No Business Profile Created Yet */}
+      {!currentBusiness && (
+        <div className="bg-white border-2 border-dashed border-brand-200 rounded-3xl p-8 sm:p-10 text-center space-y-4 shadow-sm">
+          <div className="w-14 h-14 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center mx-auto">
+            <Building2 className="w-8 h-8" />
+          </div>
+          <div className="max-w-md mx-auto space-y-1">
+            <h3 className="text-lg font-bold text-slate-900">Setup Your First Business Profile</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              You haven't set up your digital business profile yet. Add your business name, contact details, opening hours, photos, and generate your custom QR code stand.
+            </p>
+          </div>
+          <div>
+            <Link
+              to="/dashboard/profile"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>Create Business Profile Now</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Trial Countdown or Plan Status Card */}
       {isTrial && !trialRemainingTime.isExpired ? (

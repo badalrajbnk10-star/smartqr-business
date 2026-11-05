@@ -7,14 +7,20 @@ export const ForgotPassword: React.FC = () => {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { resetPassword } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
-    await resetPassword(email);
+    const res = await resetPassword(email);
     setLoading(false);
-    setSubmitted(true);
+    if (res.success) {
+      setSubmitted(true);
+    } else {
+      setError(res.error || 'Failed to send reset instructions. Please check your email.');
+    }
   };
 
   return (
@@ -28,6 +34,12 @@ export const ForgotPassword: React.FC = () => {
             Enter your business email address to receive password reset instructions.
           </p>
         </div>
+
+        {error && (
+          <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs">
+            {error}
+          </div>
+        )}
 
         {submitted ? (
           <div className="text-center py-6 space-y-3">

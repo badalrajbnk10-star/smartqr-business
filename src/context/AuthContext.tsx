@@ -29,21 +29,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isDemoMode) {
           const cached = localStorage.getItem(LOCAL_SESSION_KEY);
           if (cached) {
-            setUser(JSON.parse(cached));
+            const parsed = JSON.parse(cached);
+            // Purge old mock owner data if found
+            if (parsed.email === 'owner@hotelgrand.in') {
+              localStorage.removeItem(LOCAL_SESSION_KEY);
+              setUser(null);
+            } else {
+              setUser(parsed);
+            }
           } else {
-            // Default demo business owner
-            const defaultOwner: Profile = {
-              id: 'owner-uuid-1',
-              email: 'owner@hotelgrand.in',
-              full_name: 'Rajesh Sharma',
-              phone: '+91 9931782577',
-              role: 'business_owner',
-              is_active: true,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            };
-            setUser(defaultOwner);
-            localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(defaultOwner));
+            setUser(null);
           }
         } else {
           const { data: { session } } = await supabase.auth.getSession();
