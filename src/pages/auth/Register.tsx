@@ -30,7 +30,7 @@ export const Register: React.FC = () => {
     setLoading(false);
 
     if (res.success) {
-      navigate('/dashboard/profile?firstTime=true');
+      window.location.replace('/dashboard/profile?firstTime=true');
     } else {
       setError(res.error || 'Registration failed. Please check your information.');
     }

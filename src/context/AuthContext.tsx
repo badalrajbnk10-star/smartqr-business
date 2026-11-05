@@ -380,35 +380,184 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true };
       }
 
-      const { data, error } = await supabase.auth.signUp({
-        email: cleanEmail,
-        password: cleanPassword,
-        options: {
+      // 1. Direct REST Signup (Immune to browser lock hangs & rate-limit resilient)
+      const signupRes = await fetch(`${supabaseUrl}/auth/v1/signup`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: cleanEmail,
+          password: cleanPassword,
           data: {
             full_name: cleanFullName,
             phone: cleanPhone,
             role: 'business_owner',
           },
-        },
+        }),
       });
 
-      if (error) return { success: false, error: error.message };
+      const authData = await signupRes.json();
 
-      if (data.user) {
-        const newProfile: Profile = {
-          id: data.user.id,
-          email: cleanEmail,
-          full_name: cleanFullName,
-          phone: cleanPhone,
-          role: 'business_owner',
-          is_active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        await supabase.from('profiles').insert(newProfile);
-        setUser(newProfile);
-        return { success: true };
+      if (!signupRes.ok || !authData?.user) {
+        const errorMsg = authData?.error_description || authData?.msg || authData?.message || 'Registration failed.';
+        return { success: false, error: errorMsg };
       }
+
+      const authUser = authData.user;
+      const token = authData.access_token || supabaseAnonKey;
+
+      // Sync with supabase client session without blocking
+      if (authData.access_token && authData.refresh_token) {
+        supabase.auth.setSession({
+          access_token: authData.access_token,
+          refresh_token: authData.refresh_token,
+        }).catch(() => {});
+      }
+
+      // 2. Upsert profile safely (Avoids duplicate key 409 error)
+      const newProfile: Profile = {
+        id: authUser.id,
+        email: cleanEmail,
+        full_name: cleanFullName,
+        phone: cleanPhone,
+        role: 'business_owner',
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/profiles`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates,return=representation',
+          },
+          body: JSON.stringify(newProfile),
+        });
+      } catch (pErr) {
+        console.warn('Profile upsert warning:', pErr);
+      }
+
+      // 3. Immediately create new owner's starter business & permanent QR code
+      const ownerSlug = (cleanFullName || 'my-business')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || `biz-${authUser.id.substring(0, 6)}`;
+      const uniqueSlug = `${ownerSlug}-${authUser.id.substring(0, 4)}`;
+      const nowIso = new Date().toISOString();
+      const trialExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+      let createdBizData: any = null;
+      try {
+        const starterBiz = {
+          owner_id: authUser.id,
+          name: cleanFullName ? `${cleanFullName}'s Business` : 'My Business',
+          slug: uniqueSlug,
+          phone: cleanPhone,
+          whatsapp: cleanPhone,
+          email: cleanEmail,
+          address: '',
+          city: '',
+          state: '',
+          pincode: '',
+          short_description: '',
+          full_description: '',
+          is_active: true,
+          status: 'trialing',
+          menu_items: [],
+          services: [],
+        };
+
+        const bizRes = await fetch(`${supabaseUrl}/rest/v1/businesses`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation',
+          },
+          body: JSON.stringify(starterBiz),
+        });
+
+        if (bizRes.ok) {
+          const bizArr = await bizRes.json();
+          createdBizData = bizArr[0];
+
+          if (createdBizData) {
+            // 4. Create Permanent Dynamic QR Code
+            const qrPayload = {
+              business_id: createdBizData.id,
+              permanent_code: uniqueSlug,
+              permanent_url: `${window.location.origin}/b/${uniqueSlug}`,
+              foreground_color: '#0A1931',
+              background_color: '#FFFFFF',
+              frame_type: 'table_tent',
+              custom_text: 'Scan to Connect',
+              total_scans: 0,
+            };
+
+            await fetch(`${supabaseUrl}/rest/v1/qr_codes`, {
+              method: 'POST',
+              headers: {
+                'apikey': supabaseAnonKey,
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation',
+              },
+              body: JSON.stringify(qrPayload),
+            });
+          }
+        }
+      } catch (bizErr) {
+        console.warn('Starter business provisioning warning:', bizErr);
+      }
+
+      // 5. Store session and business profile in localStorage for 0ms restoration
+      setUser(newProfile);
+      setLoading(false);
+      localStorage.setItem(ACTIVE_PROFILE_KEY, JSON.stringify(newProfile));
+      if (authData.access_token) {
+        localStorage.setItem('smartqr_auth_token', authData.access_token);
+      }
+
+      const fullBiz = {
+        ...(createdBizData || {}),
+        name: cleanFullName ? `${cleanFullName}'s Business` : 'My Business',
+        slug: uniqueSlug,
+        phone: cleanPhone,
+        whatsapp: cleanPhone,
+        email: cleanEmail,
+        is_active: true,
+        status: 'trialing',
+        qr_code: {
+          permanent_code: uniqueSlug,
+          permanent_url: `${window.location.origin}/b/${uniqueSlug}`,
+          foreground_color: '#0A1931',
+          background_color: '#FFFFFF',
+          frame_type: 'table_tent',
+          custom_text: 'Scan to Connect',
+          total_scans: 0,
+        },
+        subscription: {
+          id: `sub-trial-${authUser.id}`,
+          business_owner_id: authUser.id,
+          business_id: createdBizData?.id,
+          plan_id: 'plan-trial',
+          status: 'trialing',
+          trial_started_at: nowIso,
+          trial_expires_at: trialExpires,
+          current_period_start: nowIso,
+          current_period_end: trialExpires,
+          autopay_mandate_status: 'pending',
+          cancel_at_period_end: false,
+        },
+      };
+      localStorage.setItem('smartqr_active_business', JSON.stringify(fullBiz));
 
       return { success: true };
     } catch (err: any) {
