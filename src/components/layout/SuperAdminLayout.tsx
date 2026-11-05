@@ -67,8 +67,8 @@ export const SuperAdminLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex">
-      {/* Sidebar */}
-      <aside className="hidden lg:flex lg:flex-col w-72 bg-slate-900 border-r border-slate-800 shrink-0">
+      {/* Sidebar - Sticky at screen height */}
+      <aside className="hidden lg:flex lg:flex-col w-72 bg-slate-900 border-r border-slate-800 shrink-0 sticky top-0 h-screen z-30 select-none">
         <div className="h-16 px-6 flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-black">
@@ -127,8 +127,8 @@ export const SuperAdminLayout: React.FC = () => {
       </aside>
 
       {/* Main Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 sm:px-6 lg:px-8 sticky top-0 z-20">
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+        <header className="h-16 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-4 sm:px-6 lg:px-8 sticky top-0 z-20">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileMenuOpen(true)}
@@ -154,7 +154,7 @@ export const SuperAdminLayout: React.FC = () => {
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
       </div>

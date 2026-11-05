@@ -58,10 +58,10 @@ export const DashboardLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex lg:flex-col w-72 bg-slate-900 text-slate-300 border-r border-slate-800 shrink-0 select-none">
+      {/* Desktop Sidebar - Sticky and fixed to screen height */}
+      <aside className="hidden lg:flex lg:flex-col w-72 bg-slate-900 text-slate-300 border-r border-slate-800 shrink-0 select-none sticky top-0 h-screen z-30">
         {/* Brand */}
-        <div className="h-16 px-6 flex items-center justify-between border-b border-slate-800">
+        <div className="h-16 px-6 flex items-center justify-between border-b border-slate-800 shrink-0">
           <Link to="/" className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white">
               <QrCode className="w-5 h-5" />
@@ -76,7 +76,7 @@ export const DashboardLayout: React.FC = () => {
         </div>
 
         {/* Business Selector */}
-        <div className="p-4 border-b border-slate-800 relative">
+        <div className="p-4 border-b border-slate-800 relative shrink-0">
           <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5 block">
             Current Business
           </label>
@@ -151,7 +151,7 @@ export const DashboardLayout: React.FC = () => {
 
         {/* View Live Public QR Page button */}
         {currentBusiness && (
-          <div className="p-4 border-t border-slate-800">
+          <div className="p-4 border-t border-slate-800 shrink-0">
             <a
               href={`/b/${currentBusiness.slug}`}
               target="_blank"
@@ -168,7 +168,7 @@ export const DashboardLayout: React.FC = () => {
         )}
 
         {/* User Card & Logout */}
-        <div className="p-4 border-t border-slate-800 flex items-center justify-between">
+        <div className="p-4 border-t border-slate-800 flex items-center justify-between shrink-0">
           <div className="truncate">
             <p className="text-xs font-semibold text-white truncate">{user?.full_name}</p>
             <p className="text-[11px] text-slate-500 truncate">{user?.email}</p>
@@ -183,10 +183,10 @@ export const DashboardLayout: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main Content Area - Expands naturally with window scroll */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
         {/* Top Bar */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 lg:px-8 sticky top-0 z-20">
+        <header className="h-16 bg-white/95 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 lg:px-8 sticky top-0 z-20">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileSidebarOpen(true)}
@@ -261,8 +261,8 @@ export const DashboardLayout: React.FC = () => {
           </div>
         )}
 
-        {/* Sub-view Content Outlet */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+        {/* Sub-view Content Outlet - Scrolls naturally with window */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
       </div>
