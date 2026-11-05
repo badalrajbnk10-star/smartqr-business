@@ -109,3 +109,31 @@ export async function exportElementToPDF(
   pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
   pdf.save(`${fileName}-smartqr-print.pdf`);
 }
+
+/**
+ * Generates and downloads a high-resolution PNG image directly from a DOM element
+ */
+export async function exportElementToPNG(
+  elementId: string,
+  fileName: string
+) {
+  const element = document.getElementById(elementId);
+  if (!element) {
+    throw new Error(`Element with id ${elementId} not found.`);
+  }
+
+  const canvas = await html2canvas(element, {
+    scale: 3, // High DPI for crisp print quality
+    useCORS: true,
+    logging: false,
+    backgroundColor: null,
+  });
+
+  const dataUrl = canvas.toDataURL('image/png');
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = `${fileName}-stand.png`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}

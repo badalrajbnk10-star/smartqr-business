@@ -75,7 +75,6 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const cached = localStorage.getItem(`${LOCAL_BUSINESSES_KEY}_${user.id}`);
         if (cached) {
           const parsed: Business[] = JSON.parse(cached);
-          // Purge old mock initialBiz if present for clean owner experience
           const filtered = parsed.filter(b => b.id !== 'biz-hotel-grand-1');
           setBusinesses(filtered);
           setCurrentBusiness(filtered[0] || null);
@@ -92,7 +91,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       } else {
         // Fetch real businesses from Supabase Cloud
-        const { data: bizList, error } = await supabase
+        const { data: rawBizList, error } = await supabase
           .from('businesses')
           .select(`
             *,
@@ -108,19 +107,119 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setBusinesses([]);
           setCurrentBusiness(null);
           setSubscription(null);
-        } else if (bizList && bizList.length > 0) {
-          setBusinesses(bizList);
-          setCurrentBusiness(bizList[0]);
-          if (bizList[0].subscription) {
-            setSubscription(bizList[0].subscription);
+        } else if (rawBizList && rawBizList.length > 0) {
+          // Normalize qr_code: PostgREST can return qr_code as an array or object
+          const normalizedList: Business[] = [];
+
+          for (const b of rawBizList) {
+            let qr = Array.isArray(b.qr_code) ? b.qr_code[0] : b.qr_code;
+
+            // Auto-heal: If an existing business is missing its permanent QR record, create it now
+            if (!qr) {
+              const newQR = {
+                business_id: b.id,
+                permanent_code: b.slug,
+                permanent_url: `${window.location.origin}/b/${b.slug}`,
+                foreground_color: '#0047D4',
+                background_color: '#FFFFFF',
+                frame_type: 'table_tent',
+                custom_text: 'Scan & Pay',
+                total_scans: 0,
+              };
+
+              const { data: insertedQR } = await supabase
+                .from('qr_codes')
+                .insert(newQR)
+                .select()
+                .single();
+
+              qr = insertedQR || newQR;
+            }
+
+            normalizedList.push({
+              ...b,
+              qr_code: qr,
+            });
+          }
+
+          setBusinesses(normalizedList);
+          setCurrentBusiness(normalizedList[0]);
+          if (normalizedList[0].subscription) {
+            setSubscription(normalizedList[0].subscription);
           } else {
             setSubscription(null);
           }
         } else {
-          // No business created yet in database
-          setBusinesses([]);
-          setCurrentBusiness(null);
-          setSubscription(null);
+          // New Business Owner with 0 businesses: Auto-provision starter business & dynamic QR code
+          const ownerSlug = (user.full_name || 'my-business')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '') || `biz-${user.id.substring(0, 6)}`;
+
+          const starterBiz = {
+            owner_id: user.id,
+            name: user.full_name ? `${user.full_name}'s Business` : 'My Business',
+            slug: `${ownerSlug}-${user.id.substring(0, 4)}`,
+            phone: user.phone || '+91 9931782577',
+            whatsapp: user.phone || '+91 9931782577',
+            email: user.email,
+            address: 'Main Market, City Center',
+            city: 'New Delhi',
+            pincode: '110001',
+            short_description: 'Welcome to our verified business! Scan our QR to view details & connect.',
+            full_description: 'Providing trusted products & services to our valued customers.',
+            is_active: true,
+            status: 'trialing' as const,
+            opening_hours: {
+              monday: { open: '09:00', close: '21:00', closed: false },
+              tuesday: { open: '09:00', close: '21:00', closed: false },
+              wednesday: { open: '09:00', close: '21:00', closed: false },
+              thursday: { open: '09:00', close: '21:00', closed: false },
+              friday: { open: '09:00', close: '21:00', closed: false },
+              saturday: { open: '09:00', close: '21:00', closed: false },
+              sunday: { open: '10:00', close: '18:00', closed: false },
+            },
+            menu_items: [],
+            services: [],
+          };
+
+          const { data: createdBiz, error: createErr } = await supabase
+            .from('businesses')
+            .insert(starterBiz)
+            .select()
+            .single();
+
+          if (!createErr && createdBiz) {
+            const starterQR = {
+              business_id: createdBiz.id,
+              permanent_code: createdBiz.slug,
+              permanent_url: `${window.location.origin}/b/${createdBiz.slug}`,
+              foreground_color: '#0047D4',
+              background_color: '#FFFFFF',
+              frame_type: 'table_tent',
+              custom_text: 'Scan & Pay',
+              total_scans: 0,
+            };
+
+            const { data: qrData } = await supabase
+              .from('qr_codes')
+              .insert(starterQR)
+              .select()
+              .single();
+
+            const fullBiz: Business = {
+              ...createdBiz,
+              qr_code: qrData || starterQR,
+            };
+
+            setBusinesses([fullBiz]);
+            setCurrentBusiness(fullBiz);
+            setSubscription(null);
+          } else {
+            setBusinesses([]);
+            setCurrentBusiness(null);
+            setSubscription(null);
+          }
         }
       }
     } catch (err) {
@@ -138,13 +237,15 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!user) return { success: false, error: 'User not logged in' };
 
     try {
-      const slug = businessData.slug || businessData.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || `biz-${Date.now()}`;
+      const rawSlug = businessData.slug || businessData.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || `biz-${Date.now()}`;
+      const slug = rawSlug.replace(/^-|-$/g, '');
+
       const newBiz: Business = {
         id: `biz-${Date.now()}`,
         owner_id: user.id,
         name: businessData.name || 'My New Business',
         slug,
-        phone: businessData.phone || '',
+        phone: businessData.phone || user.phone || '',
         address: businessData.address || '',
         short_description: businessData.short_description || '',
         full_description: businessData.full_description || '',
@@ -152,6 +253,11 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         email: businessData.email || user.email,
         google_maps_url: businessData.google_maps_url || '',
         google_review_url: businessData.google_review_url || '',
+        city: businessData.city || '',
+        state: businessData.state || '',
+        pincode: businessData.pincode || '',
+        logo_url: businessData.logo_url || '',
+        banner_url: businessData.banner_url || '',
         is_active: true,
         status: 'trialing',
         opening_hours: businessData.opening_hours || {
@@ -171,10 +277,10 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           business_id: `biz-${Date.now()}`,
           permanent_code: slug,
           permanent_url: `${window.location.origin}/b/${slug}`,
-          foreground_color: '#000000',
+          foreground_color: '#0047D4',
           background_color: '#FFFFFF',
-          frame_type: 'standard',
-          custom_text: 'SCAN ME FOR DETAILS & REVIEWS',
+          frame_type: 'table_tent',
+          custom_text: 'Scan & Pay',
           total_scans: 0,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -190,10 +296,33 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         localStorage.setItem(`${LOCAL_BUSINESSES_KEY}_${user.id}`, JSON.stringify(updated));
         return { success: true, business: newBiz };
       } else {
-        const { data, error } = await supabase.from('businesses').insert(newBiz).select().single();
-        if (error) return { success: false, error: error.message };
+        // Strip relations before inserting into businesses table
+        const { qr_code, photos, category, subscription, id: tempId, ...bizFields } = newBiz;
+
+        const { data: insertedBiz, error: insertErr } = await supabase
+          .from('businesses')
+          .insert(bizFields)
+          .select()
+          .single();
+
+        if (insertErr) return { success: false, error: insertErr.message };
+
+        // Automatically create permanent QR Code in qr_codes table
+        const newQR = {
+          business_id: insertedBiz.id,
+          permanent_code: slug,
+          permanent_url: `${window.location.origin}/b/${slug}`,
+          foreground_color: '#0047D4',
+          background_color: '#FFFFFF',
+          frame_type: 'table_tent',
+          custom_text: 'Scan & Pay',
+          total_scans: 0,
+        };
+
+        await supabase.from('qr_codes').insert(newQR);
+
         await loadData();
-        return { success: true, business: data };
+        return { success: true, business: insertedBiz };
       }
     } catch (err: any) {
       return { success: false, error: err.message };
@@ -210,7 +339,10 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         localStorage.setItem(`${LOCAL_BUSINESSES_KEY}_${user.id}`, JSON.stringify(updatedList));
         return { success: true };
       } else {
-        const { error } = await supabase.from('businesses').update(updates).eq('id', id);
+        // Strip relation fields so PostgreSQL does not reject updates
+        const { qr_code, photos, category, subscription, id: _id, owner_id: _oid, ...bizUpdates } = updates;
+
+        const { error } = await supabase.from('businesses').update(bizUpdates).eq('id', id);
         if (error) return { success: false, error: error.message };
         await loadData();
         return { success: true };

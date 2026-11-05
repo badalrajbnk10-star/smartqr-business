@@ -11,21 +11,30 @@
 
 /* Custom print media styles for QR Code exports */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 15mm;
+  }
+  body {
+    background: #ffffff !important;
+  }
   body * {
     visibility: hidden;
   }
   #printable-qr-card, #printable-qr-card * {
     visibility: visible;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   #printable-qr-card {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
+    position: absolute !important;
+    left: 50% !important;
+    top: 20mm !important;
+    transform: translateX(-50%) !important;
+    width: 145mm !important;
+    max-width: 145mm !important;
+    margin: 0 auto !important;
     box-shadow: none !important;
-    border: none !important;
   }
 }
 
