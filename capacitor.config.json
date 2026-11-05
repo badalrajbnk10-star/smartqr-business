@@ -1,0 +1,17 @@
+{
+  "appId": "com.smartqr.business",
+  "appName": "SmartQR Business",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#1E1B4B",
+      "showSpinner": false
+    }
+  }
+}

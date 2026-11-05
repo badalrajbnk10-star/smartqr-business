@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SmartQR Business</string>
+    <string name="title_activity_main">SmartQR Business</string>
+    <string name="package_name">com.smartqr.business</string>
+    <string name="custom_url_scheme">com.smartqr.business</string>
+</resources>
