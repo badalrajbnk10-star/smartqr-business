@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { QrCode, Lock, User, ArrowRight, AlertCircle, Phone } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { QrCode, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export const Login: React.FC = () => {
@@ -9,6 +9,7 @@ export const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,8 +23,8 @@ export const Login: React.FC = () => {
       const res = await login(cleanId, cleanPassword, 'business_owner');
 
       if (res.success) {
-        // Direct window navigation guarantees fresh auth session in all React contexts
-        window.location.href = '/dashboard';
+        setLoading(false);
+        navigate('/dashboard', { replace: true });
       } else {
         setLoading(false);
         setError(res.error || 'Failed to sign in. Please verify your email / mobile and password.');

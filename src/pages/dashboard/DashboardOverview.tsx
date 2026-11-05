@@ -22,7 +22,8 @@ export const DashboardOverview: React.FC = () => {
   const { currentBusiness, trialRemainingTime, subscription, activePlan } = useBusiness();
 
   const isTrial = subscription?.status === 'trialing';
-  const isSuspended = currentBusiness?.status === 'suspended' || trialRemainingTime.isExpired;
+  const isSuspended = currentBusiness?.status === 'suspended' || 
+    (currentBusiness?.status !== 'active' && subscription?.status !== 'active' && trialRemainingTime.isExpired);
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -169,10 +170,10 @@ export const DashboardOverview: React.FC = () => {
             <QrCode className="w-4 h-4 text-brand-600" />
           </div>
           <p className="text-2xl font-extrabold text-slate-900">
-            {currentBusiness?.qr_code?.total_scans || 148}
+            {currentBusiness?.qr_code?.total_scans ?? 0}
           </p>
           <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
-            <TrendingUp className="w-3 h-3" /> +18% this week
+            <TrendingUp className="w-3 h-3" /> Real-time scan counter
           </span>
         </div>
 
@@ -181,9 +182,11 @@ export const DashboardOverview: React.FC = () => {
             <span className="text-xs font-semibold uppercase tracking-wider">Google Review Taps</span>
             <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
           </div>
-          <p className="text-2xl font-extrabold text-slate-900">42</p>
-          <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
-            <TrendingUp className="w-3 h-3" /> 8 reviews collected
+          <p className="text-2xl font-extrabold text-slate-900">
+            {currentBusiness?.google_review_url ? 'Active' : 'Not Set'}
+          </p>
+          <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+            {currentBusiness?.google_review_url ? 'Direct review redirect' : 'Add review link in Profile'}
           </span>
         </div>
 
@@ -192,8 +195,10 @@ export const DashboardOverview: React.FC = () => {
             <span className="text-xs font-semibold uppercase tracking-wider">WhatsApp Queries</span>
             <Eye className="w-4 h-4 text-emerald-600" />
           </div>
-          <p className="text-2xl font-extrabold text-slate-900">29</p>
-          <span className="text-[11px] text-slate-500">Direct customer chats</span>
+          <p className="text-2xl font-extrabold text-slate-900">
+            {currentBusiness?.whatsapp ? 'Enabled' : 'Not Set'}
+          </p>
+          <span className="text-[11px] text-slate-500">Direct 1-tap WhatsApp chat</span>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm space-y-2">

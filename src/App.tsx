@@ -103,7 +103,8 @@ const OwnerRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </div>
     );
   }
-  if (!user) {
+  const hasUser = !!user || (typeof window !== 'undefined' && !!localStorage.getItem('smartqr_active_profile'));
+  if (!hasUser) {
     return <Navigate to="/login" replace />;
   }
   return <>{children}</>;

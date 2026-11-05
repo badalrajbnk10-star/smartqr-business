@@ -18,10 +18,24 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Local storage key for persistent session in demo mode
 const LOCAL_SESSION_KEY = 'smartqr_demo_session_user';
+const ACTIVE_PROFILE_KEY = 'smartqr_active_profile';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [user, setUser] = useState<Profile | null>(() => {
+    try {
+      const cached = localStorage.getItem(ACTIVE_PROFILE_KEY);
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      return !localStorage.getItem(ACTIVE_PROFILE_KEY);
+    } catch {
+      return true;
+    }
+  });
 
   // Helper to safely load or auto-provision user profile from Supabase
   const resolveUserProfile = async (authUser: any): Promise<Profile> => {
@@ -72,19 +86,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const parsed = JSON.parse(cached);
             if (parsed.email === 'owner@hotelgrand.in') {
               localStorage.removeItem(LOCAL_SESSION_KEY);
+              localStorage.removeItem(ACTIVE_PROFILE_KEY);
               setUser(null);
             } else {
               setUser(parsed);
+              localStorage.setItem(ACTIVE_PROFILE_KEY, JSON.stringify(parsed));
             }
           } else {
             setUser(null);
           }
         } else {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
+          // Check cached active profile first for 0ms restoration
+          const cachedProfile = localStorage.getItem(ACTIVE_PROFILE_KEY);
+          if (cachedProfile) {
+            try {
+              const parsed = JSON.parse(cachedProfile);
+              if (parsed?.id) {
+                setUser(parsed);
+                setLoading(false);
+              }
+            } catch {}
+          }
+
+          const { data: { session }, error } = await supabase.auth.getSession();
+          if (session?.user && !error) {
             const userProfile = await resolveUserProfile(session.user);
             setUser(userProfile);
-          } else {
+            localStorage.setItem(ACTIVE_PROFILE_KEY, JSON.stringify(userProfile));
+          } else if (!cachedProfile) {
             setUser(null);
           }
         }
@@ -102,7 +131,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (session?.user) {
           const userProfile = await resolveUserProfile(session.user);
           setUser(userProfile);
+          localStorage.setItem(ACTIVE_PROFILE_KEY, JSON.stringify(userProfile));
         } else {
+          localStorage.removeItem(ACTIVE_PROFILE_KEY);
           setUser(null);
         }
       });
@@ -243,9 +274,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       setUser(userProfile);
+      localStorage.setItem(ACTIVE_PROFILE_KEY, JSON.stringify(userProfile));
       return { success: true };
-
-      return { success: false, error: 'Login failed. Please try again.' };
     } catch (err: any) {
       return { success: false, error: err.message || 'An unexpected error occurred.' };
     }
@@ -316,12 +346,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    if (isDemoMode) {
-      localStorage.removeItem(LOCAL_SESSION_KEY);
-      setUser(null);
-    } else {
+    localStorage.removeItem(LOCAL_SESSION_KEY);
+    localStorage.removeItem(ACTIVE_PROFILE_KEY);
+    setUser(null);
+    if (!isDemoMode) {
       await supabase.auth.signOut();
-      setUser(null);
     }
   };
 

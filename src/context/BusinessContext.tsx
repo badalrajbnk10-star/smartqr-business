@@ -60,7 +60,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     if (!subscription) return;
 
-    if (subscription.status === 'active') {
+    if (subscription.status === 'active' || currentBusiness?.status === 'active') {
       setTrialRemainingTime({ hours: 720, minutes: 0, isExpired: false });
       return;
     }
@@ -159,31 +159,36 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             const bizCreated = new Date(b.created_at || Date.now()).getTime();
             const trialExpires = new Date(bizCreated + 24 * 60 * 60 * 1000).toISOString();
             const isTrialOver = Date.now() >= (bizCreated + 24 * 60 * 60 * 1000);
+            const isBizActive = b.status === 'active';
 
             if (!sub) {
               sub = {
-                id: `sub-trial-${b.id}`,
+                id: `sub-${isBizActive ? 'active' : 'trial'}-${b.id}`,
                 business_owner_id: user.id,
                 business_id: b.id,
-                plan_id: 'plan-trial',
-                status: isTrialOver ? 'expired' : 'trialing',
+                plan_id: isBizActive ? '8b589676-71a8-46b3-abe2-0ce4a9aeebcf' : 'plan-trial',
+                status: isBizActive ? 'active' : (isTrialOver ? 'expired' : 'trialing'),
                 trial_started_at: new Date(bizCreated).toISOString(),
                 trial_expires_at: trialExpires,
                 current_period_start: new Date(bizCreated).toISOString(),
-                current_period_end: trialExpires,
-                autopay_mandate_status: 'pending',
+                current_period_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+                autopay_mandate_status: isBizActive ? 'active' : 'pending',
                 cancel_at_period_end: false,
                 created_at: new Date(bizCreated).toISOString(),
                 updated_at: new Date(bizCreated).toISOString(),
-                plan: TRIAL_PLAN,
+                plan: isBizActive
+                  ? (DEFAULT_PLANS.find(p => p.id === '8b589676-71a8-46b3-abe2-0ce4a9aeebcf') || DEFAULT_PLANS[2] || DEFAULT_PLANS[0])
+                  : TRIAL_PLAN,
               };
+            } else if (isBizActive) {
+              sub.status = 'active';
             } else if (sub.status === 'trialing' && isTrialOver) {
               sub.status = 'expired';
             }
 
             normalizedList.push({
               ...b,
-              status: sub.status === 'active' ? 'active' : (isTrialOver ? 'expired' : 'trialing'),
+              status: isBizActive || sub.status === 'active' ? 'active' : (isTrialOver ? 'expired' : 'trialing'),
               qr_code: qr,
               subscription: sub,
             });

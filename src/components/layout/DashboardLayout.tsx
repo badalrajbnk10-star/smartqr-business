@@ -39,7 +39,8 @@ export const DashboardLayout: React.FC = () => {
     trialRemainingTime,
     subscription,
     activePlan,
-    upgradeSubscription
+    upgradeSubscription,
+    loading: bizLoading
   } = useBusiness();
   const location = useLocation();
   const navigate = useNavigate();
@@ -65,7 +66,8 @@ export const DashboardLayout: React.FC = () => {
   };
 
   const isTrial = subscription?.status === 'trialing';
-  const isSuspended = currentBusiness?.status === 'suspended' || trialRemainingTime.isExpired;
+  const isSuspended = currentBusiness?.status === 'suspended' || 
+    (currentBusiness?.status !== 'active' && subscription?.status !== 'active' && trialRemainingTime.isExpired);
 
   const handlePaywallSubscribe = async (plan: Plan) => {
     setLoadingPlan(plan.id);
@@ -311,7 +313,11 @@ export const DashboardLayout: React.FC = () => {
 
         {/* Sub-view Content Outlet or Paywall Lock Screen */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          {isSuspended && location.pathname !== '/dashboard/subscription' && location.pathname !== '/support' ? (
+          {bizLoading ? (
+            <div className="min-h-[50vh] flex items-center justify-center p-8">
+              <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : isSuspended && location.pathname !== '/dashboard/subscription' && location.pathname !== '/support' ? (
             /* Hard Paywall: Lock entire dashboard until a plan is unlocked */
             <div className="max-w-5xl mx-auto space-y-8 py-4">
               <div className="text-center space-y-3 max-w-2xl mx-auto">

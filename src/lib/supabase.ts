@@ -19,10 +19,6 @@ export const getSupabase = (): SupabaseClient => {
         persistSession: typeof window !== 'undefined',
         autoRefreshToken: typeof window !== 'undefined',
         detectSessionInUrl: true,
-        // Prevent navigator.locks deadlock in Chrome/Safari that causes login to hang on "Signing in..."
-        lock: typeof navigator !== 'undefined' && 'locks' in navigator
-          ? async (_name: string, _acquireTimeout: number, fn: () => Promise<any>) => await fn()
-          : undefined,
       },
       // Avoid realtime websocket errors in Node/Vitest headless testing
       realtime: typeof window !== 'undefined' ? {} : undefined,
