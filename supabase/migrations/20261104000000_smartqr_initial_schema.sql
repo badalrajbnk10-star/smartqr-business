@@ -273,7 +273,7 @@ CREATE TABLE IF NOT EXISTS public.platform_settings (
 );
 
 INSERT INTO public.platform_settings (key, value) VALUES
-('general', '{"website_name":"SmartQR Business","support_email":"support@smartqr.in","support_phone":"+91 98765 43210","maintenance_mode":false,"trial_duration_hours":24}'::jsonb),
+('general', '{"website_name":"SmartQR Business","support_email":"contact.badalsarkar@gmail.com","support_phone":"+91 9931782577","maintenance_mode":false,"trial_duration_hours":24}'::jsonb),
 ('razorpay', '{"test_mode":true,"currency":"INR"}'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
@@ -359,3 +359,28 @@ CREATE POLICY "Admin insert audit logs" ON public.audit_logs FOR INSERT WITH CHE
 -- Platform Settings: Super Admin only for write, public general settings
 CREATE POLICY "View settings" ON public.platform_settings FOR SELECT USING (true);
 CREATE POLICY "Admin write settings" ON public.platform_settings FOR ALL USING (public.is_super_admin());
+
+-- ============================================================================
+-- AUTH USER TRIGGER (Auto-create profile row on signup)
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.profiles (id, email, full_name, role)
+    VALUES (
+        new.id,
+        new.email,
+        COALESCE(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
+        COALESCE(new.raw_user_meta_data->>'role', 'business_owner')
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        email = EXCLUDED.email,
+        updated_at = timezone('utc'::text, now());
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
