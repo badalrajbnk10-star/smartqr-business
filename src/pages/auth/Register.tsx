@@ -53,9 +53,24 @@ export const Register: React.FC = () => {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-2xl text-xs space-y-2">
+            <div className="flex items-start gap-2 font-bold text-amber-800">
+              <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+              <span>{error}</span>
+            </div>
+            {error.toLowerCase().includes('rate limit') && (
+              <div className="pl-6 pt-1 text-[11px] text-amber-700 leading-relaxed border-t border-amber-200/60 mt-2">
+                <p className="font-bold">💡 1-Minute Permanent Fix in Supabase:</p>
+                <ol className="list-decimal list-inside space-y-1 mt-1 font-medium">
+                  <li>Open <strong>Supabase Dashboard</strong> → Project: <strong>kglodawxcydeqegvisrf</strong></li>
+                  <li>Click <strong>Authentication</strong> (left sidebar) → <strong>Providers</strong> → <strong>Email</strong></li>
+                  <li>Toggle <strong>"Confirm email"</strong> to <strong>OFF (Disabled)</strong> and click <strong>Save</strong></li>
+                </ol>
+                <p className="mt-2 text-slate-600">
+                  After turning this off, registration works instantly with <strong>zero email limits</strong>!
+                </p>
+              </div>
+            )}
           </div>
         )}
 
