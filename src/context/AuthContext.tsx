@@ -40,17 +40,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Helper to safely load or auto-provision user profile from Supabase
   const resolveUserProfile = async (authUser: any): Promise<Profile> => {
     try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authUser.id)
-        .maybeSingle();
-
-      if (profile && !error) {
-        return profile;
+      const res = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${authUser.id}&select=*`, {
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+        },
+      });
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list) && list.length > 0) {
+          return list[0];
+        }
       }
     } catch (err) {
-      console.warn('Could not query profile table:', err);
+      console.warn('Could not query profile table via REST:', err);
     }
 
     // Auto-heal: If profile record is missing in profiles table, provision it now
@@ -69,7 +72,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     try {
-      await supabase.from('profiles').upsert(fallbackProfile);
+      await fetch(`${supabaseUrl}/rest/v1/profiles`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates',
+        },
+        body: JSON.stringify(fallbackProfile),
+      });
     } catch (err) {
       console.warn('Could not upsert fallback profile:', err);
     }
@@ -219,16 +231,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return { success: false, error: 'Please enter a valid 10-digit mobile number or email address.' };
         }
 
-        // Search profiles and businesses by phone number
-        const [{ data: profs }, { data: bizs }] = await Promise.all([
-          supabase.from('profiles').select('email').ilike('phone', `%${digits}%`),
-          supabase.from('businesses').select('email').ilike('phone', `%${digits}%`),
-        ]);
+        // Search profiles and businesses by phone number via direct REST
+        try {
+          const headers = { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}` };
+          const [pRes, bRes] = await Promise.all([
+            fetch(`${supabaseUrl}/rest/v1/profiles?phone=ilike.*${digits}*&select=email`, { headers }),
+            fetch(`${supabaseUrl}/rest/v1/businesses?phone=ilike.*${digits}*&select=email`, { headers }),
+          ]);
+          const profs = pRes.ok ? await pRes.json() : [];
+          const bizs = bRes.ok ? await bRes.json() : [];
 
-        candidateEmails = Array.from(new Set([
-          ...(profs || []).map((p: any) => p.email?.trim().toLowerCase()),
-          ...(bizs || []).map((b: any) => b.email?.trim().toLowerCase()),
-        ])).filter(Boolean) as string[];
+          candidateEmails = Array.from(new Set([
+            ...(profs || []).map((p: any) => p.email?.trim().toLowerCase()),
+            ...(bizs || []).map((b: any) => b.email?.trim().toLowerCase()),
+          ])).filter(Boolean) as string[];
+        } catch (phoneErr) {
+          console.error('Phone lookup error:', phoneErr);
+        }
 
         if (candidateEmails.length === 0) {
           return {
