@@ -53,9 +53,9 @@ export const CustomerLandingPage: React.FC = () => {
             short_description: 'Luxury Stays, Fine Dining & Authentic Indian Cuisine',
             full_description:
               'Welcome to The Grand Heritage Hotel & Fine Dine. We take pride in delivering regal Indian hospitality, curated culinary experiences, state-of-the-art suites, and dedicated banquet halls for weddings and conferences.',
-            phone: '+919876543210',
-            whatsapp: '919876543210',
-            email: 'reservations@grandheritage.com',
+            phone: '+919931782577',
+            whatsapp: '919931782577',
+            email: 'contact.badalsarkar@gmail.com',
             address: '42, Station Road, Near Central Plaza, Sector 14, New Delhi',
             city: 'New Delhi',
             google_maps_url: 'https://maps.google.com/?q=New+Delhi',

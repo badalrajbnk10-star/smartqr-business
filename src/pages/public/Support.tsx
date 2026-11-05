@@ -53,7 +53,12 @@ export const Support: React.FC = () => {
             <Mail className="w-5 h-5" />
           </div>
           <h3 className="font-bold text-slate-900 text-sm">Email Support</h3>
-          <p className="text-xs text-slate-500">support@smartqr.in</p>
+          <a
+            href="mailto:contact.badalsarkar@gmail.com"
+            className="text-xs text-brand-600 hover:text-brand-700 font-medium block truncate"
+          >
+            contact.badalsarkar@gmail.com
+          </a>
           <p className="text-[11px] text-slate-400">Response within 2–4 hours</p>
         </div>
 
@@ -62,7 +67,12 @@ export const Support: React.FC = () => {
             <Phone className="w-5 h-5" />
           </div>
           <h3 className="font-bold text-slate-900 text-sm">Helpline</h3>
-          <p className="text-xs text-slate-500">+91 98765 43210</p>
+          <a
+            href="tel:+919931782577"
+            className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold block"
+          >
+            +91 9931782577
+          </a>
           <p className="text-[11px] text-slate-400">Mon–Sat, 10 AM – 7 PM IST</p>
         </div>
 
@@ -71,7 +81,14 @@ export const Support: React.FC = () => {
             <MessageSquare className="w-5 h-5" />
           </div>
           <h3 className="font-bold text-slate-900 text-sm">WhatsApp Desk</h3>
-          <p className="text-xs text-slate-500">+91 98765 43210</p>
+          <a
+            href="https://wa.me/919931782577"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold block"
+          >
+            +91 9931782577
+          </a>
           <p className="text-[11px] text-slate-400">Quick chat resolution</p>
         </div>
       </div>

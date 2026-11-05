@@ -160,7 +160,7 @@ export const Home: React.FC = () => {
                     </div>
                     <div className="flex items-center justify-center gap-2 text-xs text-slate-300">
                       <PhoneCall className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Call: +91 98765 43210</span>
+                      <span>Call: +91 9931782577</span>
                     </div>
                   </div>
 

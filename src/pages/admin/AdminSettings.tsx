@@ -3,8 +3,8 @@ import { Settings, Save, ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-r
 
 export const AdminSettings: React.FC = () => {
   const [websiteName, setWebsiteName] = useState('SmartQR Business');
-  const [supportEmail, setSupportEmail] = useState('support@smartqr.in');
-  const [supportPhone, setSupportPhone] = useState('+91 98765 43210');
+  const [supportEmail, setSupportEmail] = useState('contact.badalsarkar@gmail.com');
+  const [supportPhone, setSupportPhone] = useState('+91 9931782577');
   const [trialHours, setTrialHours] = useState('24');
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);

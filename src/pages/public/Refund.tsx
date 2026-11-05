@@ -27,7 +27,7 @@ export const Refund: React.FC = () => {
         <section className="space-y-2">
           <h2 className="text-base font-bold text-slate-900">3. Refund Requests</h2>
           <p>
-            If you experience technical issues or duplicate charges due to payment gateway delays, please contact our support team at <code>support@smartqr.in</code> within 7 days of the transaction. Verified erroneous charges are refunded to the original payment source within 5–7 business days.
+            If you experience technical issues or duplicate charges due to payment gateway delays, please contact our support team at <a href="mailto:contact.badalsarkar@gmail.com" className="font-semibold text-brand-600 hover:underline">contact.badalsarkar@gmail.com</a> or Helpline <a href="tel:+919931782577" className="font-semibold text-brand-600 hover:underline">+91 9931782577</a> within 7 days of the transaction. Verified erroneous charges are refunded to the original payment source within 5–7 business days.
           </p>
         </section>
       </div>

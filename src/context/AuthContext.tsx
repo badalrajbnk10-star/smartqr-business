@@ -36,7 +36,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               id: 'owner-uuid-1',
               email: 'owner@hotelgrand.in',
               full_name: 'Rajesh Sharma',
-              phone: '+91 9876543210',
+              phone: '+91 9931782577',
               role: 'business_owner',
               is_active: true,
               created_at: new Date().toISOString(),

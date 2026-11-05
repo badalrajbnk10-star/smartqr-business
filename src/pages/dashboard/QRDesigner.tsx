@@ -355,7 +355,7 @@ export const QRDesigner: React.FC = () => {
               </div>
 
               <div className="pt-2 border-t border-white/20 text-[9px] opacity-60 flex items-center justify-between">
-                <span>{currentBusiness?.phone || '+91 98765 43210'}</span>
+                <span>{currentBusiness?.phone || '+91 9931782577'}</span>
                 <span>Powered by SmartQR</span>
               </div>
             </div>
