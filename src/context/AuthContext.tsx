@@ -178,26 +178,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true };
       }
 
-      // Real Supabase Auth
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: cleanPass,
-      });
+      // Real Supabase Auth (Supports both Email and Mobile Number login)
+      let candidateEmails: string[] = [];
+      const isPhone = !cleanEmail.includes('@') && /^[+0-9\s-]+$/.test(cleanEmail);
 
-      if (error) return { success: false, error: error.message };
-
-      if (data.user) {
-        const userProfile = await resolveUserProfile(data.user);
-
-        // Allow super_admin to access all views
-        if (requiredRole && requiredRole === 'super_admin' && userProfile.role !== 'super_admin') {
-          await supabase.auth.signOut();
-          return { success: false, error: 'Access Denied: Requires Super Admin privileges.' };
+      if (isPhone) {
+        const digits = cleanEmail.replace(/[^0-9]/g, '').slice(-10);
+        if (digits.length < 10) {
+          return { success: false, error: 'Please enter a valid 10-digit mobile number or email address.' };
         }
 
-        setUser(userProfile);
-        return { success: true };
+        // Search profiles and businesses by phone number
+        const [{ data: profs }, { data: bizs }] = await Promise.all([
+          supabase.from('profiles').select('email').ilike('phone', `%${digits}%`),
+          supabase.from('businesses').select('email').ilike('phone', `%${digits}%`),
+        ]);
+
+        candidateEmails = Array.from(new Set([
+          ...(profs || []).map((p: any) => p.email?.trim().toLowerCase()),
+          ...(bizs || []).map((b: any) => b.email?.trim().toLowerCase()),
+        ])).filter(Boolean) as string[];
+
+        if (candidateEmails.length === 0) {
+          return {
+            success: false,
+            error: `No account found with mobile number ${digits}. Please sign in using your email address.`,
+          };
+        }
+      } else {
+        candidateEmails = [cleanEmail];
       }
+
+      let lastError = 'Invalid email/phone or password. Please try again.';
+      let authUser: any = null;
+
+      for (const emailToTry of candidateEmails) {
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: emailToTry,
+            password: cleanPass,
+          });
+
+          if (!error && data?.user) {
+            authUser = data.user;
+            break;
+          } else if (error) {
+            lastError = error.message;
+          }
+        } catch (attemptErr: any) {
+          lastError = attemptErr?.message || lastError;
+        }
+      }
+
+      if (!authUser) {
+        return { success: false, error: lastError };
+      }
+
+      const userProfile = await resolveUserProfile(authUser);
+
+      // Allow super_admin to access all views
+      if (requiredRole && requiredRole === 'super_admin' && userProfile.role !== 'super_admin') {
+        await supabase.auth.signOut();
+        return { success: false, error: 'Access Denied: Requires Super Admin privileges.' };
+      }
+
+      setUser(userProfile);
+      return { success: true };
 
       return { success: false, error: 'Login failed. Please try again.' };
     } catch (err: any) {
