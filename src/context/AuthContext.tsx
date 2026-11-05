@@ -212,12 +212,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     phone?: string
   ): Promise<{ success: boolean; error?: string }> => {
     try {
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanPassword = password.trim();
+      const cleanFullName = fullName.trim();
+      const cleanPhone = phone?.trim() || '';
+
       if (isDemoMode) {
         const newUser: Profile = {
           id: `owner-${Date.now()}`,
-          email: email.toLowerCase(),
-          full_name: fullName,
-          phone: phone || '',
+          email: cleanEmail,
+          full_name: cleanFullName,
+          phone: cleanPhone,
           role: 'business_owner',
           is_active: true,
           created_at: new Date().toISOString(),
@@ -229,12 +234,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
+        email: cleanEmail,
+        password: cleanPassword,
         options: {
           data: {
-            full_name: fullName,
-            phone,
+            full_name: cleanFullName,
+            phone: cleanPhone,
             role: 'business_owner',
           },
         },
@@ -245,9 +250,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.user) {
         const newProfile: Profile = {
           id: data.user.id,
-          email,
-          full_name: fullName,
-          phone,
+          email: cleanEmail,
+          full_name: cleanFullName,
+          phone: cleanPhone,
           role: 'business_owner',
           is_active: true,
           created_at: new Date().toISOString(),
@@ -278,8 +283,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isDemoMode) {
       return { success: true };
     }
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+    const cleanEmail = email.trim().toLowerCase();
+    const productionOrigin = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+      ? window.location.origin
+      : 'https://smartqr-business.vercel.app';
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: `${productionOrigin}/reset-password`,
     });
     if (error) return { success: false, error: error.message };
     return { success: true };

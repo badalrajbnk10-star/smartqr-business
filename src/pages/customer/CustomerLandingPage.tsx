@@ -236,7 +236,12 @@ export const CustomerLandingPage: React.FC = () => {
   }
 
   // Suspended or Expired Status Screen (Preserves QR Code destination URL)
-  if (business?.status === 'suspended' || business?.status === 'expired') {
+  const isTrialExpired =
+    business?.status === 'trialing' &&
+    business?.created_at &&
+    Date.now() >= new Date(business.created_at).getTime() + 24 * 60 * 60 * 1000;
+
+  if (business?.status === 'suspended' || business?.status === 'expired' || isTrialExpired) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 text-white">
         <div className="max-w-md w-full bg-slate-800/80 border border-slate-700 rounded-3xl p-8 text-center space-y-5 shadow-2xl backdrop-blur-md">

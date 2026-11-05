@@ -101,9 +101,12 @@ export const Register: React.FC = () => {
               <input
                 type="email"
                 required
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="rajesh@hotelgrand.in"
+                placeholder="rajesh@mybusiness.com"
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
@@ -120,7 +123,7 @@ export const Register: React.FC = () => {
                 required
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="+91 9931782577"
+                placeholder="+91 98765 43210"
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
@@ -135,6 +138,9 @@ export const Register: React.FC = () => {
               <input
                 type="password"
                 required
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"

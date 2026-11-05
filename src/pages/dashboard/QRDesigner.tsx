@@ -12,23 +12,26 @@ import {
   MapPin,
   MessageCircle,
   Smartphone,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Briefcase
 } from 'lucide-react';
 import { useBusiness } from '../../context/BusinessContext';
+import { useAuth } from '../../context/AuthContext';
 import { downloadQRPNG, exportElementToPDF, exportElementToPNG } from '../../lib/qr';
 import { QRFrameStyle } from '../../types/database';
 
 export const QRDesigner: React.FC = () => {
+  const { user } = useAuth();
   const { currentBusiness, updateQRCode } = useBusiness();
 
-  // Automatic Data Connection: Use logged-in owner's real database fields
-  const businessName = currentBusiness?.name || 'Grand Heritage Hotel';
+  // Automatic Data Connection: Use logged-in owner's REAL database fields
+  const businessName = currentBusiness?.name || user?.full_name || 'My Business';
   const businessCategory = currentBusiness?.category?.name || 'Verified Business';
-  const businessPhone = currentBusiness?.phone || '+91 9931782577';
-  const businessWhatsapp = currentBusiness?.whatsapp || currentBusiness?.phone || '+91 9931782577';
-  const businessAddress = currentBusiness
-    ? `${currentBusiness.address || ''}${currentBusiness.city ? ', ' + currentBusiness.city : ''}${currentBusiness.pincode ? ' - ' + currentBusiness.pincode : ''}`.trim() || '123 Heritage Road, New Delhi - 110001'
-    : '123 Heritage Road, New Delhi - 110001';
+  const businessPhone = currentBusiness?.phone || user?.phone || '';
+  const businessWhatsapp = currentBusiness?.whatsapp || currentBusiness?.phone || user?.phone || '';
+  const businessAddress = currentBusiness?.address
+    ? `${currentBusiness.address}${currentBusiness.city ? ', ' + currentBusiness.city : ''}${currentBusiness.pincode ? ' - ' + currentBusiness.pincode : ''}`.trim()
+    : (currentBusiness?.city || '');
 
   const qrConfig = currentBusiness?.qr_code || {
     id: 'qr-default',
@@ -38,17 +41,29 @@ export const QRDesigner: React.FC = () => {
     foreground_color: '#0A1931',
     background_color: '#FFFFFF',
     frame_type: 'table_tent' as QRFrameStyle,
-    custom_text: 'Scan & Pay',
-    total_scans: 148,
+    custom_text: 'Scan to Connect',
+    total_scans: 0,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
 
+  const businessCategories = [
+    { id: 'csc', label: 'CSC & Online Services', tagline: 'Fast • Trusted • Reliable', cta: 'Scan to Connect' },
+    { id: 'retail', label: 'Retail & Kirana Store', tagline: 'Quality • Best Prices • Variety', cta: 'Scan & Pay' },
+    { id: 'restaurant', label: 'Restaurant & Cafe', tagline: 'Fresh • Delicious • Hygenic', cta: 'Scan for Menu' },
+    { id: 'hotel', label: 'Hotel & Lodging', tagline: 'Stay • Dine • Enjoy', cta: 'Scan for Details' },
+    { id: 'salon', label: 'Salon & Beauty Care', tagline: 'Style • Glow • Care', cta: 'Scan to Book' },
+    { id: 'clinic', label: 'Clinic & Hospital', tagline: 'Health • Care • Consultation', cta: 'Scan to Connect' },
+    { id: 'coaching', label: 'Coaching & Education', tagline: 'Learn • Grow • Succeed', cta: 'Scan for Batches' },
+    { id: 'gym', label: 'Gym & Fitness', tagline: 'Strength • Health • Energy', cta: 'Scan to Join' },
+  ];
+
   const [fgColor, setFgColor] = useState(qrConfig.foreground_color || '#0A1931');
   const [bgColor, setBgColor] = useState(qrConfig.background_color || '#FFFFFF');
   const [frameStyle, setFrameStyle] = useState<QRFrameStyle>(qrConfig.frame_type || 'table_tent');
-  const [tagline, setTagline] = useState('Stay • Dine • Enjoy');
-  const [ctaText, setCtaText] = useState(qrConfig.custom_text || 'Scan & Pay');
+  const [tagline, setTagline] = useState('Fast • Trusted • Reliable');
+  const [ctaText, setCtaText] = useState(qrConfig.custom_text || 'Scan to Connect');
+  const [selectedCatId, setSelectedCatId] = useState('csc');
   const [includeLogo, setIncludeLogo] = useState(true);
 
   const [downloading, setDownloading] = useState(false);
@@ -56,7 +71,7 @@ export const QRDesigner: React.FC = () => {
 
   const permanentUrl = currentBusiness
     ? `${window.location.origin}/b/${currentBusiness.slug}`
-    : `${window.location.origin}/b/grand-heritage`;
+    : `${window.location.origin}/b/${user?.full_name?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'my-business'}`;
 
   // Split business name into main words + yellow highlighted last word
   const words = businessName.trim().split(' ');
@@ -70,7 +85,13 @@ export const QRDesigner: React.FC = () => {
       .map((w) => w[0])
       .slice(0, 2)
       .join('')
-      .toUpperCase();
+      .toUpperCase() || 'QR';
+  };
+
+  const handleSelectCategory = (cat: typeof businessCategories[0]) => {
+    setSelectedCatId(cat.id);
+    setTagline(cat.tagline);
+    setCtaText(cat.cta);
   };
 
   const handleSaveDesign = async () => {
@@ -143,7 +164,7 @@ export const QRDesigner: React.FC = () => {
     { label: 'Crimson Wine', fg: '#991B1B', bg: '#FFFFFF' },
   ];
 
-  const ctaOptions = ['Scan & Pay', 'Scan for Menu', 'Scan to Connect', 'Scan to Visit'];
+  const ctaOptions = ['Scan to Connect', 'Scan & Pay', 'Scan for Menu', 'Scan to Book', 'Scan for Details', 'Scan to Visit'];
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -158,7 +179,7 @@ export const QRDesigner: React.FC = () => {
             Dynamic QR Designer & Printable Assets
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Auto-generated from your business database. Download high-DPI acrylic table stands, stickers, and posters.
+            Auto-populated from your business profile. Supports CSC centers, retail shops, salons, clinics, restaurants & all businesses.
           </p>
         </div>
 
@@ -213,11 +234,39 @@ export const QRDesigner: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Controls */}
         <div className="lg:col-span-5 space-y-6">
-          {/* 1. Frame Style Selector */}
+          {/* 1. Business Category / Type Selector */}
+          <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-sm space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-blue-600" />
+              1. Choose Your Business Category
+            </h3>
+            <p className="text-[11px] text-slate-500">
+              Select your business type to automatically configure appropriate taglines and button text:
+            </p>
+
+            <div className="grid grid-cols-2 gap-2">
+              {businessCategories.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => handleSelectCategory(cat)}
+                  className={`p-2.5 rounded-xl border text-left transition-all ${
+                    selectedCatId === cat.id
+                      ? 'border-blue-600 bg-blue-50/70 text-blue-900 ring-2 ring-blue-500/20 font-bold'
+                      : 'border-slate-200 hover:border-slate-300 text-slate-700'
+                  }`}
+                >
+                  <p className="text-xs leading-tight font-semibold">{cat.label}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 2. Frame Style Selector */}
           <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-sm space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
               <Layers className="w-4 h-4 text-blue-600" />
-              1. Choose Frame & Format
+              2. Choose Frame & Format
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -271,11 +320,11 @@ export const QRDesigner: React.FC = () => {
             </div>
           </div>
 
-          {/* 2. Text & Content Customization */}
+          {/* 3. Text & Content Customization */}
           <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-sm space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-blue-600" />
-              2. Custom Tagline & Pill Text
+              3. Custom Tagline & Pill Text
             </h3>
 
             <div>
@@ -286,7 +335,7 @@ export const QRDesigner: React.FC = () => {
                 type="text"
                 value={tagline}
                 onChange={(e) => setTagline(e.target.value)}
-                placeholder="Stay • Dine • Enjoy"
+                placeholder="Fast • Trusted • Reliable"
                 className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
               />
             </div>
@@ -299,7 +348,7 @@ export const QRDesigner: React.FC = () => {
                 type="text"
                 value={ctaText}
                 onChange={(e) => setCtaText(e.target.value)}
-                placeholder="Scan & Pay"
+                placeholder="Scan to Connect"
                 className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
               />
               <div className="flex flex-wrap gap-1.5 mt-2">
@@ -334,11 +383,11 @@ export const QRDesigner: React.FC = () => {
             </div>
           </div>
 
-          {/* 3. Color Palettes */}
+          {/* 4. Color Palettes */}
           <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-sm space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
               <Palette className="w-4 h-4 text-blue-600" />
-              3. Theme & Colors
+              4. Theme & Colors
             </h3>
 
             <div className="flex flex-wrap gap-1.5">
@@ -407,7 +456,7 @@ export const QRDesigner: React.FC = () => {
         </div>
 
         {/* Right Live Preview / Stand Rendering Area */}
-        <div className="lg:col-span-7 sticky top-24">
+        <div className="lg:col-span-7 sticky top-20">
           <div className="bg-slate-200/70 p-4 sm:p-6 rounded-3xl border border-slate-300/80 flex flex-col items-center">
             <div className="w-full flex items-center justify-between mb-3 px-1">
               <span className="text-[11px] font-extrabold text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
@@ -422,7 +471,7 @@ export const QRDesigner: React.FC = () => {
             {/* Print Target DOM Element */}
             {frameStyle === 'table_tent' ? (
               /* ============================================================ */
-              /* ROYAL BLUE ACRYLIC STAND TEMPLATE (Matches Reference Image)  */
+              /* ROYAL BLUE ACRYLIC STAND TEMPLATE                            */
               /* ============================================================ */
               <div
                 id="printable-qr-card"
@@ -431,9 +480,7 @@ export const QRDesigner: React.FC = () => {
               >
                 {/* 1. Header Bar: Royal Blue Gradient + Waves */}
                 <div className="relative bg-gradient-to-r from-[#031d68] via-[#0047D4] to-[#031d68] pt-6 pb-6 px-6 text-white overflow-hidden">
-                  {/* Glossy top edge highlight */}
                   <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-b from-white/40 to-transparent"></div>
-                  {/* Lens flare orb */}
                   <div className="absolute -top-10 -right-10 w-28 h-28 bg-cyan-400/25 rounded-full blur-xl pointer-events-none"></div>
 
                   <div className="relative z-10 flex items-center gap-3.5">
@@ -447,22 +494,7 @@ export const QRDesigner: React.FC = () => {
                         />
                       ) : (
                         <div className="flex flex-col items-center justify-center text-[#031d68]">
-                          <svg
-                            className="w-6 h-6 text-[#0047D4]"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
-                            <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
-                            <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
-                            <path d="M10 6h4" />
-                            <path d="M10 10h4" />
-                            <path d="M10 14h4" />
-                          </svg>
+                          <Briefcase className="w-6 h-6 text-[#0047D4]" />
                           <span className="text-[10px] font-black tracking-tight leading-none mt-0.5">
                             {getInitials(businessName)}
                           </span>
@@ -488,7 +520,7 @@ export const QRDesigner: React.FC = () => {
                       <div className="flex items-center gap-2 mt-1">
                         <div className="h-[1px] w-6 sm:w-8 bg-white/50"></div>
                         <span className="text-white/95 text-[11px] font-semibold tracking-wider">
-                          {businessCategory !== 'Verified Business' ? `${businessCategory} • ` : ''}{tagline}
+                          {tagline}
                         </span>
                         <div className="h-[1px] w-6 sm:w-8 bg-white/50"></div>
                       </div>
@@ -551,9 +583,8 @@ export const QRDesigner: React.FC = () => {
                         />
                       </div>
 
-                      {/* Scan & Pay Pill Badge */}
+                      {/* Pill Badge */}
                       <div className="mt-3 w-full max-w-[170px] py-1.5 px-3 rounded-full bg-gradient-to-r from-[#031d68] via-[#0047D4] to-[#031d68] text-white shadow-md flex items-center justify-center gap-2 ring-1 ring-cyan-400/40">
-                        {/* Viewfinder bracket icon around phone */}
                         <div className="relative w-4 h-4 flex items-center justify-center shrink-0">
                           <span className="absolute -top-0.5 -left-0.5 w-1 h-1 border-t-[1.5px] border-l-[1.5px] border-white"></span>
                           <span className="absolute -top-0.5 -right-0.5 w-1 h-1 border-t-[1.5px] border-r-[1.5px] border-white"></span>
@@ -561,7 +592,7 @@ export const QRDesigner: React.FC = () => {
                           <span className="absolute -bottom-0.5 -right-0.5 w-1 h-1 border-b-[1.5px] border-r-[1.5px] border-white"></span>
                           <Smartphone className="w-3 h-3 text-white" />
                         </div>
-                        <span className="text-xs font-black tracking-wide uppercase drop-shadow-sm">
+                        <span className="text-xs font-black tracking-wide uppercase drop-shadow-sm truncate">
                           {ctaText}
                         </span>
                       </div>
@@ -576,7 +607,6 @@ export const QRDesigner: React.FC = () => {
                         Thank You!
                       </p>
 
-                      {/* Golden curved underline swoosh */}
                       <svg
                         className="w-28 sm:w-32 h-3.5 text-[#F59E0B] mt-1"
                         viewBox="0 0 140 16"
@@ -613,7 +643,6 @@ export const QRDesigner: React.FC = () => {
                     {/* Badge 2: Google Maps Directions */}
                     <div className="flex items-center justify-center gap-1.5 px-1">
                       <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                        {/* Branded Google Maps Pin */}
                         <svg className="w-6 h-6 shrink-0" viewBox="0 0 24 24">
                           <path fill="#4285F4" d="M12 2C7.58 2 4 5.58 4 10c0 5.25 8 12 8 12s8-6.75 8-12c0-4.42-3.58-8-8-8z" />
                           <path fill="#34A853" d="M12 2v20c.61-.51 1.25-1.09 1.89-1.74C18.23 15.93 20 12.84 20 10c0-4.42-3.58-8-8-8z" />
@@ -629,7 +658,7 @@ export const QRDesigner: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Badge 3: Review on Google (Strictly NO stars, NO rating numbers!) */}
+                    {/* Badge 3: Review on Google */}
                     <div className="flex items-center justify-center gap-1.5 px-1">
                       <div className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center shrink-0 shadow-sm p-1">
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
@@ -647,9 +676,8 @@ export const QRDesigner: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 4. Footer Bar: Royal Blue Curve with Phone & Address */}
+                {/* 4. Footer Bar: Phone & Address */}
                 <div className="relative bg-gradient-to-r from-[#031d68] via-[#0047D4] to-[#031d68] text-white pt-2.5 pb-2.5 px-5">
-                  {/* Top curved wave SVG for footer */}
                   <div className="absolute -top-3 inset-x-0 w-full overflow-hidden leading-none pointer-events-none">
                     <svg
                       viewBox="0 0 500 20"
@@ -673,7 +701,7 @@ export const QRDesigner: React.FC = () => {
                     <div className="flex items-center gap-1.5 font-bold">
                       <PhoneCall className="w-3.5 h-3.5 text-white shrink-0" />
                       <span className="text-[11px] sm:text-xs font-bold text-white tracking-wide">
-                        {businessPhone}
+                        {businessPhone || 'Contact Business'}
                       </span>
                     </div>
 
@@ -684,7 +712,7 @@ export const QRDesigner: React.FC = () => {
                     <div className="flex items-center gap-1 text-left min-w-0">
                       <MapPin className="w-3.5 h-3.5 text-white shrink-0" />
                       <span className="text-[10px] text-white/95 truncate max-w-[190px]">
-                        {businessAddress}
+                        {businessAddress || 'Verified Local Business'}
                       </span>
                     </div>
                   </div>
@@ -702,7 +730,7 @@ export const QRDesigner: React.FC = () => {
                 </div>
               </div>
             ) : (
-              /* Fallback Card for other frame styles (Poster, Card, Sticker, Minimal) */
+              /* Fallback Card for other frame styles */
               <div
                 id="printable-qr-card"
                 className="w-full max-w-sm rounded-3xl shadow-xl p-6 text-center space-y-4 transition-all"
@@ -748,7 +776,7 @@ export const QRDesigner: React.FC = () => {
 
                 <div className="space-y-1 pt-1">
                   <p className="text-xs font-bold">
-                    Scan for Digital Profile, Menu & Directions
+                    Scan for Digital Profile, Details & Connect
                   </p>
                   <p className="text-[10px] opacity-75">
                     Point your smartphone camera to connect with us instantly.
@@ -756,7 +784,7 @@ export const QRDesigner: React.FC = () => {
                 </div>
 
                 <div className="pt-2 border-t border-slate-200 text-[10px] opacity-70 flex items-center justify-between">
-                  <span>{businessPhone}</span>
+                  <span>{businessPhone || 'Contact Business'}</span>
                   <span>Powered by SmartQR</span>
                 </div>
               </div>

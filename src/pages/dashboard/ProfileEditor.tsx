@@ -12,9 +12,23 @@ import {
   CheckCircle2,
   AlertCircle,
   ExternalLink,
-  Plus
+  Plus,
+  Briefcase
 } from 'lucide-react';
 import { useBusiness } from '../../context/BusinessContext';
+
+const BUSINESS_CATEGORIES = [
+  { id: 'f13ce3c2-83e4-41be-92e3-3e47a913034c', name: 'CSC & Online Services (Cyber Cafe, CSC Center, Aadhaar, Banking Kiosk)' },
+  { id: '1f764dab-ae3f-445d-9c70-5cd2671b8b2e', name: 'Retail Store & Kirana (General Store, Grocery, Supermarket, Clothing, Electronics)' },
+  { id: '649575c7-56ee-4e93-9da2-e3b5f145b515', name: 'Restaurants & Dining (Family Restaurant, Dhaba, Fast Food, Biryani)' },
+  { id: '43513385-7610-434b-a61d-45351a06bbf5', name: 'Cafes & Bakeries (Coffee Shop, Bakery, Tea Point, Sweets)' },
+  { id: '8e1feda8-1736-4313-bad8-e0361a150625', name: 'Hotels & Lodging (Hotel, Resort, Guest House, Lodge)' },
+  { id: 'e5504088-6aca-4fe1-aa74-2c6c36b71575', name: 'Salons & Spas (Beauty Parlor, Hair Salon, Spa, Grooming)' },
+  { id: 'a1e00ddd-29f3-4fbc-974d-360a232fa125', name: 'Hospitals & Clinics (Doctor Clinic, Dental, Pharmacy, Diagnostic Lab)' },
+  { id: '24a3fa24-4448-46f4-94fe-5edc7e57cceb', name: 'Coaching & Education (Tuition Center, Computer Academy, School, Library)' },
+  { id: 'f13ce3c2-83e4-41be-92e3-3e47a913034c', name: 'Gym & Fitness (Gym, Fitness Center, Yoga, Crossfit)' },
+  { id: 'f13ce3c2-83e4-41be-92e3-3e47a913034c', name: 'Professional Services & Other Businesses' },
+];
 
 export const ProfileEditor: React.FC = () => {
   const { currentBusiness, updateBusiness, createBusiness } = useBusiness();
@@ -23,10 +37,14 @@ export const ProfileEditor: React.FC = () => {
 
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
+  const [categoryId, setCategoryId] = useState(BUSINESS_CATEGORIES[0].id);
   const [phone, setPhone] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [pincode, setPincode] = useState('');
   const [shortDesc, setShortDesc] = useState('');
   const [fullDesc, setFullDesc] = useState('');
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
@@ -42,10 +60,14 @@ export const ProfileEditor: React.FC = () => {
     if (currentBusiness && !isNew) {
       setName(currentBusiness.name || '');
       setSlug(currentBusiness.slug || '');
+      setCategoryId(currentBusiness.category_id || BUSINESS_CATEGORIES[0].id);
       setPhone(currentBusiness.phone || '');
       setWhatsapp(currentBusiness.whatsapp || '');
       setEmail(currentBusiness.email || '');
       setAddress(currentBusiness.address || '');
+      setCity(currentBusiness.city || '');
+      setState(currentBusiness.state || '');
+      setPincode(currentBusiness.pincode || '');
       setShortDesc(currentBusiness.short_description || '');
       setFullDesc(currentBusiness.full_description || '');
       setGoogleMapsUrl(currentBusiness.google_maps_url || '');
@@ -55,10 +77,14 @@ export const ProfileEditor: React.FC = () => {
     } else if (isNew) {
       setName('');
       setSlug('');
+      setCategoryId(BUSINESS_CATEGORIES[0].id);
       setPhone('');
       setWhatsapp('');
       setEmail('');
       setAddress('');
+      setCity('');
+      setState('');
+      setPincode('');
       setShortDesc('');
       setFullDesc('');
       setGoogleMapsUrl('');
@@ -79,10 +105,14 @@ export const ProfileEditor: React.FC = () => {
         const res = await createBusiness({
           name,
           slug: slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          category_id: categoryId,
           phone,
           whatsapp,
           email,
           address,
+          city,
+          state,
+          pincode,
           short_description: shortDesc,
           full_description: fullDesc,
           google_maps_url: googleMapsUrl,
@@ -99,10 +129,14 @@ export const ProfileEditor: React.FC = () => {
       } else if (currentBusiness) {
         const res = await updateBusiness(currentBusiness.id, {
           name,
+          category_id: categoryId,
           phone,
           whatsapp,
           email,
           address,
+          city,
+          state,
+          pincode,
           short_description: shortDesc,
           full_description: fullDesc,
           google_maps_url: googleMapsUrl,
@@ -182,7 +216,7 @@ export const ProfileEditor: React.FC = () => {
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="The Grand Heritage Hotel"
+                placeholder="e.g. Maa Durga CSC Center / Sharma Super Store"
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
               />
             </div>
@@ -196,7 +230,7 @@ export const ProfileEditor: React.FC = () => {
                 disabled={!isNew}
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
-                placeholder="grand-heritage"
+                placeholder="my-business"
                 className={`w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm font-mono ${
                   !isNew ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-brand-500'
                 }`}
@@ -208,6 +242,27 @@ export const ProfileEditor: React.FC = () => {
           </div>
 
           <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+              <Briefcase className="w-3.5 h-3.5 text-brand-600" />
+              <span>Business Category & Industry *</span>
+            </label>
+            <select
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none bg-white font-medium text-slate-800"
+            >
+              {BUSINESS_CATEGORIES.map((cat, idx) => (
+                <option key={`${cat.id}-${idx}`} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-slate-400 mt-1">
+              Select your business type. This adapts your public landing page buttons and QR card taglines.
+            </p>
+          </div>
+
+          <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Short Tagline / Catchphrase
             </label>
@@ -215,7 +270,7 @@ export const ProfileEditor: React.FC = () => {
               type="text"
               value={shortDesc}
               onChange={(e) => setShortDesc(e.target.value)}
-              placeholder="Luxury Stays, Fine Dining & Authentic Indian Cuisine"
+              placeholder="e.g. Fast & Reliable Online Services • Banking Kiosk • All Online Work"
               className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
             />
           </div>
@@ -228,7 +283,7 @@ export const ProfileEditor: React.FC = () => {
               rows={3}
               value={fullDesc}
               onChange={(e) => setFullDesc(e.target.value)}
-              placeholder="Tell customers about your specialties, quality, hygiene, and offerings..."
+              placeholder="Describe your services, working hours, specialties, or product offerings..."
               className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
             />
           </div>
@@ -251,7 +306,7 @@ export const ProfileEditor: React.FC = () => {
                 required
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="+91 9931782577"
+                placeholder="+91 98765 43210"
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
               />
             </div>
@@ -264,7 +319,7 @@ export const ProfileEditor: React.FC = () => {
                 type="text"
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
-                placeholder="919931782577"
+                placeholder="919876543210"
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
               />
             </div>
@@ -277,24 +332,66 @@ export const ProfileEditor: React.FC = () => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="info@hotelgrand.in"
+                placeholder="contact@mybusiness.com"
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Physical Outlet Full Address *
+            <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-blue-600" />
+              <span>Physical Outlet Full Address *</span>
             </label>
             <input
               type="text"
               required
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="42, Station Road, Near Central Plaza, Sector 14, New Delhi"
+              placeholder="Shop No. 5, Main Market, Near SBI Bank"
               className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
             />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                City / Town
+              </label>
+              <input
+                type="text"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="e.g. Patna / New Delhi"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                State
+              </label>
+              <input
+                type="text"
+                value={state}
+                onChange={(e) => setState(e.target.value)}
+                placeholder="e.g. Bihar / Delhi / UP"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Pincode
+              </label>
+              <input
+                type="text"
+                value={pincode}
+                onChange={(e) => setPincode(e.target.value)}
+                placeholder="e.g. 800001"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
+              />
+            </div>
           </div>
         </div>
 

@@ -22,6 +22,26 @@ const BusinessContext = createContext<BusinessContextType | undefined>(undefined
 
 const LOCAL_BUSINESSES_KEY = 'smartqr_demo_businesses';
 
+const TRIAL_PLAN: Plan = {
+  id: 'plan-trial',
+  name: '24-Hour Free Trial',
+  slug: 'trial',
+  price_paise: 0,
+  billing_period: 'trial',
+  max_businesses: 1,
+  max_photos_per_business: 5,
+  features: [
+    '24-Hour Full Trial Access',
+    'Dynamic QR Code & Printable Stand',
+    'Customer Profile Page',
+    'Google Maps & WhatsApp Integration'
+  ],
+  is_active: true,
+  sort_order: 0,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+};
+
 export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -40,12 +60,12 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     if (!subscription) return;
 
-    const interval = setInterval(() => {
-      if (subscription.status === 'active') {
-        setTrialRemainingTime({ hours: 720, minutes: 0, isExpired: false });
-        return;
-      }
+    if (subscription.status === 'active') {
+      setTrialRemainingTime({ hours: 720, minutes: 0, isExpired: false });
+      return;
+    }
 
+    const checkTime = () => {
       const expiry = new Date(subscription.trial_expires_at).getTime();
       const now = Date.now();
       const diff = expiry - now;
@@ -57,8 +77,10 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         setTrialRemainingTime({ hours, minutes, isExpired: false });
       }
-    }, 1000);
+    };
 
+    checkTime();
+    const interval = setInterval(checkTime, 1000);
     return () => clearInterval(interval);
   }, [subscription]);
 
@@ -66,6 +88,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!user) {
       setBusinesses([]);
       setCurrentBusiness(null);
+      setSubscription(null);
       setLoading(false);
       return;
     }
@@ -78,13 +101,8 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           const filtered = parsed.filter(b => b.id !== 'biz-hotel-grand-1');
           setBusinesses(filtered);
           setCurrentBusiness(filtered[0] || null);
-          if (filtered[0]?.subscription) {
-            setSubscription(filtered[0].subscription);
-          } else {
-            setSubscription(null);
-          }
+          setSubscription(filtered[0]?.subscription || null);
         } else {
-          // Fresh new owner has 0 businesses initially
           setBusinesses([]);
           setCurrentBusiness(null);
           setSubscription(null);
@@ -108,7 +126,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setCurrentBusiness(null);
           setSubscription(null);
         } else if (rawBizList && rawBizList.length > 0) {
-          // Normalize qr_code: PostgREST can return qr_code as an array or object
+          // Normalize businesses & verify 24-hr trial state
           const normalizedList: Business[] = [];
 
           for (const b of rawBizList) {
@@ -123,7 +141,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 foreground_color: '#0047D4',
                 background_color: '#FFFFFF',
                 frame_type: 'table_tent',
-                custom_text: 'Scan & Pay',
+                custom_text: 'Scan to Connect',
                 total_scans: 0,
               };
 
@@ -131,53 +149,81 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 .from('qr_codes')
                 .insert(newQR)
                 .select()
-                .single();
+                .maybeSingle();
 
               qr = insertedQR || newQR;
             }
 
+            // Verify or calculate 24-hr trial subscription
+            let sub = Array.isArray(b.subscription) ? b.subscription[0] : b.subscription;
+            const bizCreated = new Date(b.created_at || Date.now()).getTime();
+            const trialExpires = new Date(bizCreated + 24 * 60 * 60 * 1000).toISOString();
+            const isTrialOver = Date.now() >= (bizCreated + 24 * 60 * 60 * 1000);
+
+            if (!sub) {
+              sub = {
+                id: `sub-trial-${b.id}`,
+                business_owner_id: user.id,
+                business_id: b.id,
+                plan_id: 'plan-trial',
+                status: isTrialOver ? 'expired' : 'trialing',
+                trial_started_at: new Date(bizCreated).toISOString(),
+                trial_expires_at: trialExpires,
+                current_period_start: new Date(bizCreated).toISOString(),
+                current_period_end: trialExpires,
+                autopay_mandate_status: 'pending',
+                cancel_at_period_end: false,
+                created_at: new Date(bizCreated).toISOString(),
+                updated_at: new Date(bizCreated).toISOString(),
+                plan: TRIAL_PLAN,
+              };
+            } else if (sub.status === 'trialing' && isTrialOver) {
+              sub.status = 'expired';
+            }
+
             normalizedList.push({
               ...b,
+              status: sub.status === 'active' ? 'active' : (isTrialOver ? 'expired' : 'trialing'),
               qr_code: qr,
+              subscription: sub,
             });
           }
 
           setBusinesses(normalizedList);
           setCurrentBusiness(normalizedList[0]);
-          if (normalizedList[0].subscription) {
-            setSubscription(normalizedList[0].subscription);
-          } else {
-            setSubscription(null);
-          }
+          setSubscription(normalizedList[0].subscription || null);
         } else {
-          // New Business Owner with 0 businesses: Auto-provision starter business & dynamic QR code
+          // Fresh New Owner: Provision clean starter profile (ZERO fake address/phone)
           const ownerSlug = (user.full_name || 'my-business')
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-|-$/g, '') || `biz-${user.id.substring(0, 6)}`;
 
+          const nowIso = new Date().toISOString();
+          const trialEndIso = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
           const starterBiz = {
             owner_id: user.id,
             name: user.full_name ? `${user.full_name}'s Business` : 'My Business',
             slug: `${ownerSlug}-${user.id.substring(0, 4)}`,
-            phone: user.phone || '+91 9931782577',
-            whatsapp: user.phone || '+91 9931782577',
+            phone: user.phone || '',
+            whatsapp: user.phone || '',
             email: user.email,
-            address: 'Main Market, City Center',
-            city: 'New Delhi',
-            pincode: '110001',
-            short_description: 'Welcome to our verified business! Scan our QR to view details & connect.',
-            full_description: 'Providing trusted products & services to our valued customers.',
+            address: '',
+            city: '',
+            pincode: '',
+            short_description: '',
+            full_description: '',
             is_active: true,
             status: 'trialing' as const,
             opening_hours: {
-              monday: { open: '09:00', close: '21:00', closed: false },
-              tuesday: { open: '09:00', close: '21:00', closed: false },
-              wednesday: { open: '09:00', close: '21:00', closed: false },
-              thursday: { open: '09:00', close: '21:00', closed: false },
-              friday: { open: '09:00', close: '21:00', closed: false },
-              saturday: { open: '09:00', close: '21:00', closed: false },
-              sunday: { open: '10:00', close: '18:00', closed: false },
+              monday: { open: '09:00', close: '20:00', closed: false },
+              tuesday: { open: '09:00', close: '20:00', closed: false },
+              wednesday: { open: '09:00', close: '20:00', closed: false },
+              thursday: { open: '09:00', close: '20:00', closed: false },
+              friday: { open: '09:00', close: '20:00', closed: false },
+              saturday: { open: '09:00', close: '20:00', closed: false },
+              sunday: { open: '10:00', close: '16:00', closed: false },
             },
             menu_items: [],
             services: [],
@@ -197,7 +243,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               foreground_color: '#0047D4',
               background_color: '#FFFFFF',
               frame_type: 'table_tent',
-              custom_text: 'Scan & Pay',
+              custom_text: 'Scan to Connect',
               total_scans: 0,
             };
 
@@ -207,14 +253,32 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               .select()
               .single();
 
+            const initialTrialSub: Subscription = {
+              id: `sub-trial-${createdBiz.id}`,
+              business_owner_id: user.id,
+              business_id: createdBiz.id,
+              plan_id: 'plan-trial',
+              status: 'trialing',
+              trial_started_at: nowIso,
+              trial_expires_at: trialEndIso,
+              current_period_start: nowIso,
+              current_period_end: trialEndIso,
+              autopay_mandate_status: 'pending',
+              cancel_at_period_end: false,
+              created_at: nowIso,
+              updated_at: nowIso,
+              plan: TRIAL_PLAN,
+            };
+
             const fullBiz: Business = {
               ...createdBiz,
               qr_code: qrData || starterQR,
+              subscription: initialTrialSub,
             };
 
             setBusinesses([fullBiz]);
             setCurrentBusiness(fullBiz);
-            setSubscription(null);
+            setSubscription(initialTrialSub);
           } else {
             setBusinesses([]);
             setCurrentBusiness(null);
@@ -243,7 +307,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const newBiz: Business = {
         id: `biz-${Date.now()}`,
         owner_id: user.id,
-        name: businessData.name || 'My New Business',
+        name: businessData.name || 'My Business',
         slug,
         phone: businessData.phone || user.phone || '',
         address: businessData.address || '',
@@ -261,13 +325,13 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         is_active: true,
         status: 'trialing',
         opening_hours: businessData.opening_hours || {
-          monday: { open: '09:00', close: '21:00', closed: false },
-          tuesday: { open: '09:00', close: '21:00', closed: false },
-          wednesday: { open: '09:00', close: '21:00', closed: false },
-          thursday: { open: '09:00', close: '21:00', closed: false },
-          friday: { open: '09:00', close: '21:00', closed: false },
-          saturday: { open: '09:00', close: '21:00', closed: false },
-          sunday: { open: '10:00', close: '18:00', closed: false },
+          monday: { open: '09:00', close: '20:00', closed: false },
+          tuesday: { open: '09:00', close: '20:00', closed: false },
+          wednesday: { open: '09:00', close: '20:00', closed: false },
+          thursday: { open: '09:00', close: '20:00', closed: false },
+          friday: { open: '09:00', close: '20:00', closed: false },
+          saturday: { open: '09:00', close: '20:00', closed: false },
+          sunday: { open: '10:00', close: '16:00', closed: false },
         },
         menu_items: [],
         services: [],
@@ -280,7 +344,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           foreground_color: '#0047D4',
           background_color: '#FFFFFF',
           frame_type: 'table_tent',
-          custom_text: 'Scan & Pay',
+          custom_text: 'Scan to Connect',
           total_scans: 0,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -296,7 +360,6 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         localStorage.setItem(`${LOCAL_BUSINESSES_KEY}_${user.id}`, JSON.stringify(updated));
         return { success: true, business: newBiz };
       } else {
-        // Strip relations before inserting into businesses table
         const { qr_code, photos, category, subscription, id: tempId, ...bizFields } = newBiz;
 
         const { data: insertedBiz, error: insertErr } = await supabase
@@ -307,7 +370,6 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         if (insertErr) return { success: false, error: insertErr.message };
 
-        // Automatically create permanent QR Code in qr_codes table
         const newQR = {
           business_id: insertedBiz.id,
           permanent_code: slug,
@@ -315,12 +377,11 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           foreground_color: '#0047D4',
           background_color: '#FFFFFF',
           frame_type: 'table_tent',
-          custom_text: 'Scan & Pay',
+          custom_text: 'Scan to Connect',
           total_scans: 0,
         };
 
         await supabase.from('qr_codes').insert(newQR);
-
         await loadData();
         return { success: true, business: insertedBiz };
       }
@@ -339,7 +400,6 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         localStorage.setItem(`${LOCAL_BUSINESSES_KEY}_${user.id}`, JSON.stringify(updatedList));
         return { success: true };
       } else {
-        // Strip relation fields so PostgreSQL does not reject updates
         const { qr_code, photos, category, subscription, id: _id, owner_id: _oid, ...bizUpdates } = updates;
 
         const { error } = await supabase.from('businesses').update(bizUpdates).eq('id', id);
@@ -377,7 +437,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const upgradeSubscription = async (planId: string, paymentResponse: any): Promise<boolean> => {
     try {
-      const selectedPlan = DEFAULT_PLANS.find((p) => p.id === planId) || DEFAULT_PLANS[1];
+      const selectedPlan = DEFAULT_PLANS.find((p) => p.id === planId) || DEFAULT_PLANS[0];
       const now = new Date();
       const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
@@ -391,7 +451,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         trial_expires_at: subscription?.trial_expires_at || now.toISOString(),
         current_period_start: now.toISOString(),
         current_period_end: periodEnd.toISOString(),
-        razorpay_subscription_id: paymentResponse.razorpay_subscription_id,
+        razorpay_subscription_id: paymentResponse?.razorpay_subscription_id || `sub_rzp_${Date.now()}`,
         autopay_mandate_status: 'authorized',
         cancel_at_period_end: false,
         created_at: now.toISOString(),
@@ -400,6 +460,24 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       };
 
       setSubscription(updatedSub);
+      setTrialRemainingTime({ hours: 720, minutes: 0, isExpired: false });
+
+      if (!isDemoMode && user) {
+        try {
+          await supabase.from('subscriptions').insert({
+            business_owner_id: user.id,
+            business_id: currentBusiness?.id,
+            plan_id: planId,
+            status: 'active',
+            current_period_start: now.toISOString(),
+            current_period_end: periodEnd.toISOString(),
+            autopay_mandate_status: 'authorized',
+            razorpay_subscription_id: paymentResponse?.razorpay_subscription_id || `sub_rzp_${Date.now()}`,
+          });
+        } catch (subErr) {
+          console.warn('Could not persist to subscriptions table:', subErr);
+        }
+      }
 
       if (currentBusiness) {
         await updateBusiness(currentBusiness.id, { status: 'active' });
@@ -411,6 +489,12 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return false;
     }
   };
+
+  // Determine active plan to display
+  const activePlanToDisplay: Plan | null =
+    subscription?.status === 'active'
+      ? (subscription.plan || DEFAULT_PLANS[0])
+      : (subscription?.status === 'trialing' ? TRIAL_PLAN : null);
 
   return (
     <BusinessContext.Provider
@@ -424,7 +508,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updateQRCode,
         refreshData: loadData,
         trialRemainingTime,
-        activePlan: subscription?.plan || DEFAULT_PLANS[0],
+        activePlan: activePlanToDisplay,
         subscription,
         upgradeSubscription,
       }}
