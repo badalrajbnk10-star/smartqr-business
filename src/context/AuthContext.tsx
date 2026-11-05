@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Profile, UserRole } from '../types/database';
-import { supabase, isDemoMode } from '../lib/supabase';
+import { supabase, isDemoMode, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 
 interface AuthContextType {
   user: Profile | null;
@@ -245,16 +245,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       for (const emailToTry of candidateEmails) {
         try {
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email: emailToTry,
-            password: cleanPass,
+          const authRes = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: 'POST',
+            headers: {
+              'apikey': supabaseAnonKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: emailToTry,
+              password: cleanPass,
+            }),
           });
 
-          if (!error && data?.user) {
+          const data = await authRes.json();
+
+          if (authRes.ok && data?.access_token && data?.user) {
             authUser = data.user;
+            // Sync with supabase client session without blocking
+            supabase.auth.setSession({
+              access_token: data.access_token,
+              refresh_token: data.refresh_token,
+            }).catch((e) => console.warn('Supabase setSession non-fatal warning:', e));
             break;
-          } else if (error) {
-            lastError = error.message;
+          } else if (data?.error_description || data?.msg || data?.message) {
+            lastError = data.error_description || data.msg || data.message;
           }
         } catch (attemptErr: any) {
           lastError = attemptErr?.message || lastError;
@@ -274,6 +288,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       setUser(userProfile);
+      setLoading(false);
       localStorage.setItem(ACTIVE_PROFILE_KEY, JSON.stringify(userProfile));
       return { success: true };
     } catch (err: any) {

@@ -24,7 +24,7 @@ export const Login: React.FC = () => {
 
       if (res.success) {
         setLoading(false);
-        navigate('/dashboard', { replace: true });
+        window.location.replace('/dashboard');
       } else {
         setLoading(false);
         setError(res.error || 'Failed to sign in. Please verify your email / mobile and password.');

@@ -1,10 +1,10 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Profile, Business, Plan, Subscription, QRCode, QRTemplate } from '../types/database';
 
-const supabaseUrl =
+export const supabaseUrl =
   import.meta.env?.VITE_SUPABASE_URL ||
   'https://kglodawxcydeqegvisrf.supabase.co';
-const supabaseAnonKey =
+export const supabaseAnonKey =
   import.meta.env?.VITE_SUPABASE_ANON_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtnbG9kYXd4Y3lkZXFlZ3Zpc3JmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4NzI3MzcsImV4cCI6MjEwOTQ0ODczN30.8UJZmCpMe-vvC4-b-PJokc9sfW99nngWQlN2Lso4VUo';
 
