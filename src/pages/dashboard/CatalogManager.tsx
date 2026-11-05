@@ -5,7 +5,8 @@ import { MenuItem, BusinessService } from '../../types/database';
 
 export const CatalogManager: React.FC = () => {
   const { currentBusiness, updateBusiness } = useBusiness();
-  const [tab, setTab] = useState<'menu' | 'services'>('menu');
+  const isFood = currentBusiness?.category?.slug === 'restaurant' || currentBusiness?.category?.slug === 'cafe';
+  const [tab, setTab] = useState<'menu' | 'services'>(() => (isFood ? 'menu' : 'services'));
 
   // Menu Form
   const [menuName, setMenuName] = useState('');
@@ -56,6 +57,23 @@ export const CatalogManager: React.FC = () => {
     if (!currentBusiness) return;
     const updated = menuItems.filter((m) => m.id !== id);
     await updateBusiness(currentBusiness.id, { menu_items: updated });
+  };
+
+  const handleQuickAddService = async (item: { name: string; price?: number; duration?: string; desc?: string }) => {
+    if (!currentBusiness) return;
+    setSaving(true);
+    const newSvc: BusinessService = {
+      id: `s-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      name: item.name,
+      price: item.price,
+      duration: item.duration,
+      description: item.desc,
+    };
+    const updated = [...services, newSvc];
+    await updateBusiness(currentBusiness.id, { services: updated });
+    setSaving(false);
+    setSuccess(true);
+    setTimeout(() => setSuccess(false), 3000);
   };
 
   const handleAddService = async (e: React.FormEvent) => {
@@ -256,11 +274,56 @@ export const CatalogManager: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Add Service Form */}
+          {/* Quick 1-Click Popular Service Packs for CSC, Retail, Salons & Clinics */}
+          <div className="bg-gradient-to-br from-brand-50 to-indigo-50 border border-brand-200/80 rounded-3xl p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-brand-600" />
+                  1-Click Quick Add Common Services & Products
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Click any service below to instantly add it to your live customer rate card without typing.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+              {[
+                { name: 'Aadhaar Card Print (PVC)', price: 50, duration: '5 min', desc: 'High quality color PVC card' },
+                { name: 'PAN Card New / Correction', price: 150, duration: '15 min', desc: 'Online application with doc verification' },
+                { name: 'Income / Caste Certificate', price: 100, duration: '10 min', desc: 'RTPS online government application' },
+                { name: 'AePS Money Withdrawal & Transfer', price: 20, duration: '2 min', desc: 'Instant biometric cash withdrawal' },
+                { name: 'Electricity / Mobile Bill Payment', price: 10, duration: '2 min', desc: 'Instant bill payment & receipt' },
+                { name: 'Xerox Photocopy & Lamination', price: 5, duration: '1 min', desc: 'B&W / Color print and lamination' },
+                { name: 'General Consultation & Checkup', price: 200, duration: '15 min', desc: 'Health checkup and advice' },
+                { name: 'Haircut & Beard Grooming', price: 120, duration: '25 min', desc: 'Professional styling & trim' },
+                { name: 'Daily Essentials & Kirana Pack', price: 499, duration: 'Same day', desc: 'Rice, Dal, Oil & Spices combo' },
+              ].map((preset, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  disabled={saving}
+                  onClick={() => handleQuickAddService(preset)}
+                  className="flex items-center justify-between p-3 rounded-2xl bg-white border border-brand-200 hover:border-brand-500 hover:shadow-sm text-left transition-all group"
+                >
+                  <div className="truncate pr-2">
+                    <p className="text-xs font-bold text-slate-800 group-hover:text-brand-600 truncate">{preset.name}</p>
+                    <p className="text-[10px] text-slate-400 truncate">{preset.desc}</p>
+                  </div>
+                  <span className="shrink-0 px-2 py-1 rounded-lg bg-brand-50 text-brand-700 text-xs font-bold">
+                    + ₹{preset.price}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Add Custom Service Form */}
           <form onSubmit={handleAddService} className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
               <Briefcase className="w-4 h-4 text-brand-600" />
-              Add Service or Room Package
+              Add Custom Service or Product
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

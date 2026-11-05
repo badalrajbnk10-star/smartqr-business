@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Business, QRCode, Subscription, Plan, MenuItem, BusinessService } from '../types/database';
 import { useAuth } from './AuthContext';
-import { supabase, isDemoMode, DEFAULT_PLANS } from '../lib/supabase';
+import { supabase, isDemoMode, DEFAULT_PLANS, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 
 interface BusinessContextType {
   businesses: Business[];
@@ -21,6 +21,7 @@ interface BusinessContextType {
 const BusinessContext = createContext<BusinessContextType | undefined>(undefined);
 
 const LOCAL_BUSINESSES_KEY = 'smartqr_demo_businesses';
+const ACTIVE_BIZ_KEY = 'smartqr_active_business';
 
 const TRIAL_PLAN: Plan = {
   id: 'plan-trial',
@@ -44,10 +45,41 @@ const TRIAL_PLAN: Plan = {
 
 export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [currentBusiness, setCurrentBusiness] = useState<Business | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [businesses, setBusinesses] = useState<Business[]>(() => {
+    try {
+      const cached = localStorage.getItem(ACTIVE_BIZ_KEY);
+      return cached ? [JSON.parse(cached)] : [];
+    } catch {
+      return [];
+    }
+  });
+  const [currentBusiness, setCurrentBusiness] = useState<Business | null>(() => {
+    try {
+      const cached = localStorage.getItem(ACTIVE_BIZ_KEY);
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      return !localStorage.getItem(ACTIVE_BIZ_KEY);
+    } catch {
+      return true;
+    }
+  });
+  const [subscription, setSubscription] = useState<Subscription | null>(() => {
+    try {
+      const cached = localStorage.getItem(ACTIVE_BIZ_KEY);
+      if (cached) {
+        const b = JSON.parse(cached);
+        return b?.subscription || null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  });
 
   // Compute 24-hr trial countdown
   const [trialRemainingTime, setTrialRemainingTime] = useState({
@@ -108,24 +140,30 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setSubscription(null);
         }
       } else {
-        // Fetch real businesses from Supabase Cloud
-        const { data: rawBizList, error } = await supabase
-          .from('businesses')
-          .select(`
-            *,
-            category:business_categories(*),
-            photos:business_photos(*),
-            qr_code:qr_codes(*),
-            subscription:subscriptions(*, plan:plans(*))
-          `)
-          .eq('owner_id', user.id);
+        // Fetch real businesses from Supabase Cloud via direct REST
+        const selectQuery = '*,category:business_categories(*),photos:business_photos(*),qr_code:qr_codes(*),subscription:subscriptions(*,plan:plans(*))';
+        let rawBizList: any[] = [];
 
-        if (error) {
-          console.error('Error fetching businesses from Supabase:', error);
-          setBusinesses([]);
-          setCurrentBusiness(null);
-          setSubscription(null);
-        } else if (rawBizList && rawBizList.length > 0) {
+        try {
+          const res = await fetch(`${supabaseUrl}/rest/v1/businesses?owner_id=eq.${user.id}&select=${encodeURIComponent(selectQuery)}`, {
+            headers: {
+              'apikey': supabaseAnonKey,
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+            },
+          });
+          if (res.ok) {
+            rawBizList = await res.json();
+          }
+        } catch (fetchErr) {
+          console.warn('Direct fetch error, falling back to supabase client:', fetchErr);
+          const { data } = await supabase
+            .from('businesses')
+            .select(selectQuery)
+            .eq('owner_id', user.id);
+          rawBizList = data || [];
+        }
+
+        if (rawBizList && rawBizList.length > 0) {
           // Normalize businesses & verify 24-hr trial state
           const normalizedList: Business[] = [];
 
@@ -197,6 +235,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setBusinesses(normalizedList);
           setCurrentBusiness(normalizedList[0]);
           setSubscription(normalizedList[0].subscription || null);
+          localStorage.setItem(ACTIVE_BIZ_KEY, JSON.stringify(normalizedList[0]));
         } else {
           // Fresh New Owner: Provision clean starter profile (ZERO fake address/phone)
           const ownerSlug = (user.full_name || 'my-business')
@@ -284,6 +323,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setBusinesses([fullBiz]);
             setCurrentBusiness(fullBiz);
             setSubscription(initialTrialSub);
+            localStorage.setItem(ACTIVE_BIZ_KEY, JSON.stringify(fullBiz));
           } else {
             setBusinesses([]);
             setCurrentBusiness(null);
@@ -409,6 +449,11 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         const { error } = await supabase.from('businesses').update(bizUpdates).eq('id', id);
         if (error) return { success: false, error: error.message };
+        if (currentBusiness && currentBusiness.id === id) {
+          const merged = { ...currentBusiness, ...bizUpdates, updated_at: new Date().toISOString() };
+          setCurrentBusiness(merged);
+          localStorage.setItem(ACTIVE_BIZ_KEY, JSON.stringify(merged));
+        }
         await loadData();
         return { success: true };
       }

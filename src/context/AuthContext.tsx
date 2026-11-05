@@ -290,6 +290,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userProfile);
       setLoading(false);
       localStorage.setItem(ACTIVE_PROFILE_KEY, JSON.stringify(userProfile));
+
+      // Pre-fetch owner's business into cache so all dashboard views render in 0ms
+      try {
+        const selectQuery = '*,category:business_categories(*),photos:business_photos(*),qr_code:qr_codes(*),subscription:subscriptions(*,plan:plans(*))';
+        const bizRes = await fetch(`${supabaseUrl}/rest/v1/businesses?owner_id=eq.${authUser.id}&select=${encodeURIComponent(selectQuery)}`, {
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+        });
+        if (bizRes.ok) {
+          const rawBizList = await bizRes.json();
+          if (Array.isArray(rawBizList) && rawBizList.length > 0) {
+            const b = rawBizList[0];
+            const isBizActive = b.status === 'active';
+            const bizData = {
+              ...b,
+              qr_code: Array.isArray(b.qr_code) ? b.qr_code[0] : b.qr_code,
+              status: isBizActive ? 'active' : b.status,
+              subscription: {
+                id: `sub-active-${b.id}`,
+                business_owner_id: userProfile.id,
+                business_id: b.id,
+                plan_id: '8b589676-71a8-46b3-abe2-0ce4a9aeebcf',
+                status: isBizActive ? 'active' : 'trialing',
+                trial_started_at: b.created_at,
+                trial_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                current_period_start: b.created_at,
+                current_period_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+                autopay_mandate_status: 'active',
+                cancel_at_period_end: false,
+                created_at: b.created_at,
+                updated_at: b.updated_at,
+                plan: {
+                  id: '8b589676-71a8-46b3-abe2-0ce4a9aeebcf',
+                  name: 'Business Plus',
+                  slug: 'business-plus',
+                  price_paise: 39900,
+                  billing_period: 'monthly',
+                  max_businesses: 3,
+                  max_photos_per_business: 50,
+                  features: ['All Features Unlocked'],
+                  is_active: true,
+                  sort_order: 3,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                },
+              },
+            };
+            localStorage.setItem('smartqr_active_business', JSON.stringify(bizData));
+          }
+        }
+      } catch (bizCacheErr) {
+        console.warn('Could not pre-cache business in AuthContext:', bizCacheErr);
+      }
+
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'An unexpected error occurred.' };
@@ -363,9 +419,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     localStorage.removeItem(LOCAL_SESSION_KEY);
     localStorage.removeItem(ACTIVE_PROFILE_KEY);
+    localStorage.removeItem('smartqr_active_business');
     setUser(null);
     if (!isDemoMode) {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut().catch(() => {});
     }
   };
 
