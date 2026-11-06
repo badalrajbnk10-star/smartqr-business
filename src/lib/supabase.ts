@@ -39,7 +39,7 @@ export const supabase = {
 // Seed default mock plans for instant local testing and offline capability
 export const DEFAULT_PLANS: Plan[] = [
   {
-    id: 'plan-starter',
+    id: '616db9cc-75f2-42ce-9928-55e2cb093c4f',
     name: 'Starter',
     slug: 'starter',
     price_paise: 9900,
@@ -60,7 +60,7 @@ export const DEFAULT_PLANS: Plan[] = [
     updated_at: new Date().toISOString(),
   },
   {
-    id: 'plan-professional',
+    id: '99b28c5d-9ffa-4920-915c-fe2bade628da',
     name: 'Professional',
     slug: 'professional',
     price_paise: 19900,
@@ -81,7 +81,7 @@ export const DEFAULT_PLANS: Plan[] = [
     updated_at: new Date().toISOString(),
   },
   {
-    id: 'plan-business-plus',
+    id: '8b589676-71a8-46b3-abe2-0ce4a9aeebcf',
     name: 'Business Plus',
     slug: 'business-plus',
     price_paise: 39900,

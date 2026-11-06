@@ -192,36 +192,40 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               qr = insertedQR || newQR;
             }
 
-            // Verify or calculate 24-hr trial subscription
-            let sub = Array.isArray(b.subscription) ? b.subscription[0] : b.subscription;
+            // Check if an actual paid subscription exists in database or opening_hours._subscription
+            const dbSub = Array.isArray(b.subscription) ? b.subscription[0] : b.subscription;
+            const customPaidSub = (b.opening_hours as any)?._subscription;
+            const activePaidSub = (dbSub && dbSub.status === 'active') ? dbSub : (customPaidSub && customPaidSub.status === 'active' ? customPaidSub : null);
+
             const bizCreated = new Date(b.created_at || Date.now()).getTime();
             const trialExpires = new Date(bizCreated + 24 * 60 * 60 * 1000).toISOString();
             const isTrialOver = Date.now() >= (bizCreated + 24 * 60 * 60 * 1000);
-            const isBizActive = b.status === 'active';
 
-            if (!sub) {
+            let sub: Subscription;
+            if (activePaidSub) {
+              const matchedPlan = DEFAULT_PLANS.find(p => p.id === activePaidSub.plan_id || p.slug === activePaidSub.plan_slug) || DEFAULT_PLANS[0];
               sub = {
-                id: `sub-${isBizActive ? 'active' : 'trial'}-${b.id}`,
+                ...activePaidSub,
+                plan: matchedPlan,
+                status: 'active',
+              };
+            } else {
+              sub = {
+                id: `sub-trial-${b.id}`,
                 business_owner_id: user.id,
                 business_id: b.id,
-                plan_id: isBizActive ? '8b589676-71a8-46b3-abe2-0ce4a9aeebcf' : 'plan-trial',
-                status: isBizActive ? 'active' : (isTrialOver ? 'expired' : 'trialing'),
+                plan_id: 'plan-trial',
+                status: isTrialOver ? 'expired' : 'trialing',
                 trial_started_at: new Date(bizCreated).toISOString(),
                 trial_expires_at: trialExpires,
                 current_period_start: new Date(bizCreated).toISOString(),
-                current_period_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-                autopay_mandate_status: isBizActive ? 'active' : 'pending',
+                current_period_end: trialExpires,
+                autopay_mandate_status: 'pending',
                 cancel_at_period_end: false,
                 created_at: new Date(bizCreated).toISOString(),
                 updated_at: new Date(bizCreated).toISOString(),
-                plan: isBizActive
-                  ? (DEFAULT_PLANS.find(p => p.id === '8b589676-71a8-46b3-abe2-0ce4a9aeebcf') || DEFAULT_PLANS[2] || DEFAULT_PLANS[0])
-                  : TRIAL_PLAN,
+                plan: TRIAL_PLAN,
               };
-            } else if (isBizActive) {
-              sub.status = 'active';
-            } else if (sub.status === 'trialing' && isTrialOver) {
-              sub.status = 'expired';
             }
 
             const bizPhotos = Array.isArray(b.photos) && b.photos.length > 0
@@ -231,7 +235,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             normalizedList.push({
               ...b,
               photos: bizPhotos,
-              status: isBizActive || sub.status === 'active' ? 'active' : (isTrialOver ? 'expired' : 'trialing'),
+              status: sub.status === 'active' ? 'active' : (isTrialOver ? 'expired' : 'trialing'),
               qr_code: qr,
               subscription: sub,
             });
@@ -507,7 +511,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const upgradeSubscription = async (planId: string, paymentResponse: any): Promise<boolean> => {
     try {
-      const selectedPlan = DEFAULT_PLANS.find((p) => p.id === planId) || DEFAULT_PLANS[0];
+      const selectedPlan = DEFAULT_PLANS.find((p) => p.id === planId || p.slug === planId) || DEFAULT_PLANS[0];
       const now = new Date();
       const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
@@ -515,7 +519,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         id: `sub-${Date.now()}`,
         business_owner_id: user?.id || 'owner-1',
         business_id: currentBusiness?.id,
-        plan_id: planId,
+        plan_id: selectedPlan.id,
         status: 'active',
         trial_started_at: subscription?.trial_started_at || now.toISOString(),
         trial_expires_at: subscription?.trial_expires_at || now.toISOString(),
@@ -532,25 +536,24 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setSubscription(updatedSub);
       setTrialRemainingTime({ hours: 720, minutes: 0, isExpired: false });
 
-      if (!isDemoMode && user) {
-        try {
-          await supabase.from('subscriptions').insert({
-            business_owner_id: user.id,
-            business_id: currentBusiness?.id,
-            plan_id: planId,
-            status: 'active',
-            current_period_start: now.toISOString(),
-            current_period_end: periodEnd.toISOString(),
-            autopay_mandate_status: 'authorized',
-            razorpay_subscription_id: paymentResponse?.razorpay_subscription_id || `sub_rzp_${Date.now()}`,
-          });
-        } catch (subErr) {
-          console.warn('Could not persist to subscriptions table:', subErr);
-        }
-      }
-
       if (currentBusiness) {
-        await updateBusiness(currentBusiness.id, { status: 'active' });
+        const currentHours = ((currentBusiness.opening_hours || {}) as any);
+        await updateBusiness(currentBusiness.id, {
+          status: 'active',
+          opening_hours: {
+            ...currentHours,
+            _subscription: {
+              plan_id: selectedPlan.id,
+              plan_slug: selectedPlan.slug,
+              plan_name: selectedPlan.name,
+              amount_paise: selectedPlan.price_paise,
+              status: 'active',
+              payment_id: paymentResponse?.razorpay_payment_id || `pay_${Date.now()}`,
+              activated_at: now.toISOString(),
+              expires_at: periodEnd.toISOString(),
+            },
+          },
+        });
       }
 
       return true;

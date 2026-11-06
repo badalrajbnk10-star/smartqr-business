@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { CreditCard, Edit2, Plus, CheckCircle2, Save, X } from 'lucide-react';
-import { DEFAULT_PLANS } from '../../lib/supabase';
+import React, { useState, useEffect } from 'react';
+import { CreditCard, Edit2, Plus, CheckCircle2, Save, X, RefreshCw } from 'lucide-react';
+import { DEFAULT_PLANS, supabaseUrl, supabaseAnonKey } from '../../lib/supabase';
 import { Plan } from '../../types/database';
 
 export const AdminPlans: React.FC = () => {
@@ -8,7 +8,30 @@ export const AdminPlans: React.FC = () => {
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [editPriceRupees, setEditPriceRupees] = useState('');
   const [editMaxPhotos, setEditMaxPhotos] = useState('');
+  const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  useEffect(() => {
+    async function loadDbPlans() {
+      try {
+        const res = await fetch(`${supabaseUrl}/rest/v1/plans?select=*&order=sort_order.asc`, {
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setPlans(data);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load plans from database, using cached defaults:', err);
+      }
+    }
+    loadDbPlans();
+  }, []);
 
   const startEdit = (p: Plan) => {
     setEditingPlan(p);
@@ -16,23 +39,50 @@ export const AdminPlans: React.FC = () => {
     setEditMaxPhotos(p.max_photos_per_business.toString());
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingPlan) return;
+    setSaving(true);
+
+    const newPricePaise = Math.round(parseFloat(editPriceRupees) * 100);
+    const newMaxPhotos = parseInt(editMaxPhotos) || editingPlan.max_photos_per_business;
 
     const updatedPlans = plans.map((p) => {
       if (p.id === editingPlan.id) {
         return {
           ...p,
-          price_paise: Math.round(parseFloat(editPriceRupees) * 100),
-          max_photos_per_business: parseInt(editMaxPhotos) || p.max_photos_per_business,
+          price_paise: newPricePaise,
+          max_photos_per_business: newMaxPhotos,
           updated_at: new Date().toISOString(),
         };
       }
       return p;
     });
 
+    try {
+      await fetch(`${supabaseUrl}/rest/v1/plans?id=eq.${editingPlan.id}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          price_paise: newPricePaise,
+          max_photos_per_business: newMaxPhotos,
+          updated_at: new Date().toISOString(),
+        }),
+      });
+    } catch (err) {
+      console.warn('Could not patch plan in database:', err);
+    }
+
     setPlans(updatedPlans);
+    try {
+      localStorage.setItem('smartqr_plans', JSON.stringify(updatedPlans));
+    } catch {}
+
+    setSaving(false);
     setEditingPlan(null);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
@@ -46,7 +96,7 @@ export const AdminPlans: React.FC = () => {
             Subscription Plans & Pricing Control
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">
-            Configure plan prices in paise, business limits, and photo quotas.
+            Super Admin Control: Edit any plan price in Rupees and update photo limits live.
           </p>
         </div>
       </div>
@@ -54,7 +104,7 @@ export const AdminPlans: React.FC = () => {
       {savedSuccess && (
         <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs sm:text-sm flex items-center gap-2">
           <CheckCircle2 className="w-5 h-5 shrink-0" />
-          <span>Plan pricing updated and synced with billing engine!</span>
+          <span>Plan pricing updated and synced with billing engine & database!</span>
         </div>
       )}
 
@@ -116,7 +166,7 @@ export const AdminPlans: React.FC = () => {
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 text-white space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-bold text-base">Edit {editingPlan.name} Plan</h3>
+              <h3 className="font-bold text-base">Edit {editingPlan.name} Plan Price</h3>
               <button onClick={() => setEditingPlan(null)} className="p-1 text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
@@ -132,7 +182,7 @@ export const AdminPlans: React.FC = () => {
                   required
                   value={editPriceRupees}
                   onChange={(e) => setEditPriceRupees(e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-amber-500 font-bold"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
                   Stored as {Math.round((parseFloat(editPriceRupees) || 0) * 100)} paise in database.
@@ -162,9 +212,11 @@ export const AdminPlans: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs"
+                  disabled={saving}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-colors"
                 >
-                  Save Plan
+                  {saving && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{saving ? 'Updating...' : 'Save Plan Price'}</span>
                 </button>
               </div>
             </form>

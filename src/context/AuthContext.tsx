@@ -168,6 +168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const cleanInput = cleanEmail.replace(/[\s-]/g, '');
 
           const isBadal =
+            cleanInput === 'badalrajbnk10@gmail.com' ||
             cleanInput === 'contact.badalsarkar@gmail.com' ||
             cleanInput === '9931782577' ||
             cleanInput === '+919931782577' ||
@@ -177,13 +178,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             cleanInput === 'admin@smartqr.in' ||
             cleanInput === 'admin';
 
-          const isBadalAuthorized = isBadal && (cleanPass.length >= 4 || cleanPass === '9931782577');
+          const isBadalAuthorized = isBadal && (cleanPass === 'Badalsarkar@22610' || cleanPass === 'Badalsarkar@2010');
           const isDefaultAuthorized = isDefaultAdmin && (cleanPass === 'AdminSecurePassword2026!' || cleanPass === 'admin' || cleanPass.length >= 6);
 
           if (isBadalAuthorized || isDefaultAuthorized) {
             const adminUser: Profile = {
               id: 'super-admin-root-id',
-              email: 'contact.badalsarkar@gmail.com',
+              email: 'badalrajbnk10@gmail.com',
               full_name: 'Badal Sarkar',
               phone: '+91 9931782577',
               role: 'super_admin',
@@ -197,7 +198,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } else {
             return {
               success: false,
-              error: 'Invalid Super Admin credentials. Please use Email: contact.badalsarkar@gmail.com or Mobile: 9931782577',
+              error: 'Invalid Super Admin credentials. Access denied.',
             };
           }
         }
@@ -323,39 +324,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const rawBizList = await bizRes.json();
           if (Array.isArray(rawBizList) && rawBizList.length > 0) {
             const b = rawBizList[0];
-            const isBizActive = b.status === 'active';
+            const actualSub = Array.isArray(b.subscription) ? b.subscription[0] : b.subscription;
+            const customPaidSub = (b.opening_hours as any)?._subscription;
+            const activePaidSub = (actualSub && actualSub.status === 'active') ? actualSub : (customPaidSub && customPaidSub.status === 'active' ? customPaidSub : null);
+
+            const bizCreated = new Date(b.created_at || Date.now()).getTime();
+            const trialExpires = new Date(bizCreated + 24 * 60 * 60 * 1000).toISOString();
+            const isTrialOver = Date.now() >= (bizCreated + 24 * 60 * 60 * 1000);
+
             const bizData = {
               ...b,
               qr_code: Array.isArray(b.qr_code) ? b.qr_code[0] : b.qr_code,
-              status: isBizActive ? 'active' : b.status,
-              subscription: {
-                id: `sub-active-${b.id}`,
+              status: activePaidSub ? 'active' : (isTrialOver ? 'expired' : 'trialing'),
+              subscription: activePaidSub || {
+                id: `sub-trial-${b.id}`,
                 business_owner_id: userProfile.id,
                 business_id: b.id,
-                plan_id: '8b589676-71a8-46b3-abe2-0ce4a9aeebcf',
-                status: isBizActive ? 'active' : 'trialing',
-                trial_started_at: b.created_at,
-                trial_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-                current_period_start: b.created_at,
-                current_period_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-                autopay_mandate_status: 'active',
+                plan_id: 'plan-trial',
+                status: isTrialOver ? 'expired' : 'trialing',
+                trial_started_at: new Date(bizCreated).toISOString(),
+                trial_expires_at: trialExpires,
+                current_period_start: new Date(bizCreated).toISOString(),
+                current_period_end: trialExpires,
+                autopay_mandate_status: 'pending',
                 cancel_at_period_end: false,
-                created_at: b.created_at,
-                updated_at: b.updated_at,
-                plan: {
-                  id: '8b589676-71a8-46b3-abe2-0ce4a9aeebcf',
-                  name: 'Business Plus',
-                  slug: 'business-plus',
-                  price_paise: 39900,
-                  billing_period: 'monthly',
-                  max_businesses: 3,
-                  max_photos_per_business: 50,
-                  features: ['All Features Unlocked'],
-                  is_active: true,
-                  sort_order: 3,
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                },
+                created_at: new Date(bizCreated).toISOString(),
+                updated_at: new Date(bizCreated).toISOString(),
               },
             };
             localStorage.setItem('smartqr_active_business', JSON.stringify(bizData));

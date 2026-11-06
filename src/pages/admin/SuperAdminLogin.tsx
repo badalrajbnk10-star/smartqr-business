@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldAlert, Lock, Mail, ArrowRight, AlertTriangle, KeyRound, CheckCircle2 } from 'lucide-react';
+import { ShieldAlert, Lock, Mail, ArrowRight, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export const SuperAdminLogin: React.FC = () => {
-  const [email, setEmail] = useState('contact.badalsarkar@gmail.com');
-  const [password, setPassword] = useState('9931782577');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -26,11 +26,6 @@ export const SuperAdminLogin: React.FC = () => {
     }
   };
 
-  const handleQuickFill = () => {
-    setEmail('contact.badalsarkar@gmail.com');
-    setPassword('9931782577');
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 sm:p-10 text-white shadow-2xl space-y-6">
@@ -42,28 +37,8 @@ export const SuperAdminLogin: React.FC = () => {
             Super Admin Control Portal
           </h2>
           <p className="text-xs text-slate-400">
-            Authorized root access for Badal Sarkar
+            Authorized administrator root access only
           </p>
-        </div>
-
-        {/* Quick Fill Box */}
-        <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-2">
-          <div className="flex items-center justify-between text-xs text-amber-300 font-semibold">
-            <span className="flex items-center gap-1.5">
-              <KeyRound className="w-4 h-4 text-amber-400" /> Authorized Admin
-            </span>
-            <button
-              type="button"
-              onClick={handleQuickFill}
-              className="text-[11px] bg-amber-500 text-slate-950 font-bold px-2.5 py-1 rounded-lg hover:bg-amber-400 transition"
-            >
-              Auto-Fill Credentials
-            </button>
-          </div>
-          <div className="text-[11px] text-slate-300 space-y-0.5 font-mono">
-            <div><span className="text-slate-400">Email / Mobile:</span> contact.badalsarkar@gmail.com / 9931782577</div>
-            <div><span className="text-slate-400">Password:</span> 9931782577</div>
-          </div>
         </div>
 
         {error && (
@@ -85,7 +60,7 @@ export const SuperAdminLogin: React.FC = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="contact.badalsarkar@gmail.com or 9931782577"
+                placeholder="Enter Super Admin Email or Mobile"
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-slate-500"
               />
             </div>
@@ -102,7 +77,7 @@ export const SuperAdminLogin: React.FC = () => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password or mobile number"
+                placeholder="Enter password"
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-slate-500"
               />
             </div>
