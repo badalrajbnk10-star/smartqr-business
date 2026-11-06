@@ -441,30 +441,63 @@ export const CustomerLandingPage: React.FC = () => {
               )}
 
               {/* Opening Hours */}
-              {business.opening_hours && (
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-brand-600" />
-                      Opening Hours
-                    </h3>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                      Open Today
-                    </span>
-                  </div>
+              {business.opening_hours && (() => {
+                const daysOrdered = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+                const dayLabels: Record<string, string> = {
+                  monday: 'Mon',
+                  tuesday: 'Tue',
+                  wednesday: 'Wed',
+                  thursday: 'Thu',
+                  friday: 'Fri',
+                  saturday: 'Sat',
+                  sunday: 'Sun',
+                };
+                const todayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
+                const todayData = (business.opening_hours as any)?.[todayKey];
+                const isClosedToday = !todayData || Boolean(todayData.closed);
 
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    {Object.entries(business.opening_hours)
-                      .filter(([day, val]) => !day.startsWith('_') && val && typeof val === 'object' && ('open' in val || 'closed' in val))
-                      .map(([day, hours]: [string, any]) => (
-                        <div key={day} className="flex justify-between py-1 border-b border-slate-200/50 capitalize text-slate-600">
-                          <span className="font-medium">{day.substring(0, 3)}:</span>
-                          <span>{hours.closed ? 'Closed' : `${hours.open || '9:00 AM'} - ${hours.close || '8:00 PM'}`}</span>
-                        </div>
-                      ))}
+                return (
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-brand-600" />
+                        Opening Hours
+                      </h3>
+                      {isClosedToday ? (
+                        <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold">
+                          Closed Today
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                          Open Today ({todayData?.open || '9:00 AM'} - {todayData?.close || '8:00 PM'})
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      {daysOrdered.map((dKey) => {
+                        const dayHours = (business.opening_hours as any)?.[dKey];
+                        if (!dayHours || typeof dayHours !== 'object') return null;
+                        const isCurrentDay = dKey === todayKey;
+                        return (
+                          <div
+                            key={dKey}
+                            className={`flex justify-between py-1 border-b border-slate-200/50 capitalize ${
+                              isCurrentDay ? 'font-bold text-brand-600' : 'text-slate-600'
+                            }`}
+                          >
+                            <span className="flex items-center gap-1">
+                              {dayLabels[dKey]}:
+                              {isCurrentDay && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>}
+                            </span>
+                            <span>{dayHours.closed ? 'Closed' : `${dayHours.open || '9:00 AM'} - ${dayHours.close || '8:00 PM'}`}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Direct Google Review Callout */}
               <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/70 text-center space-y-2.5">

@@ -552,13 +552,15 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       } else {
         const { qr_code, photos, category, subscription, id: _id, owner_id: _oid, ...bizUpdates } = updates;
 
-        // If photos are provided, persist them inside opening_hours._photos in Postgres
-        if (Array.isArray(photos)) {
-          const currentHours = ((currentBusiness?.opening_hours || {}) as any);
+        // If opening_hours or photos are provided, safely merge them inside opening_hours in Postgres
+        const currentHours = ((currentBusiness?.opening_hours || {}) as any);
+        if (bizUpdates.opening_hours || Array.isArray(photos)) {
           bizUpdates.opening_hours = {
             ...currentHours,
-            ...bizUpdates.opening_hours,
-            _photos: photos,
+            ...(bizUpdates.opening_hours || {}),
+            _subscription: currentHours._subscription,
+            _pending_payment: currentHours._pending_payment,
+            _photos: Array.isArray(photos) ? photos : (currentHours._photos || []),
           };
         }
 

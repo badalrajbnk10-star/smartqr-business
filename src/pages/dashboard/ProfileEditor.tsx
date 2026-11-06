@@ -13,10 +13,33 @@ import {
   AlertCircle,
   ExternalLink,
   Plus,
-  Briefcase
+  Briefcase,
+  Copy,
+  Calendar
 } from 'lucide-react';
 import { useBusiness } from '../../context/BusinessContext';
 import { DirectPhotoUpload } from '../../components/common/DirectPhotoUpload';
+import { OpeningHours } from '../../types/database';
+
+const DAYS_OF_WEEK: { key: keyof OpeningHours; label: string; shortLabel: string }[] = [
+  { key: 'monday', label: 'Monday', shortLabel: 'Mon' },
+  { key: 'tuesday', label: 'Tuesday', shortLabel: 'Tue' },
+  { key: 'wednesday', label: 'Wednesday', shortLabel: 'Wed' },
+  { key: 'thursday', label: 'Thursday', shortLabel: 'Thu' },
+  { key: 'friday', label: 'Friday', shortLabel: 'Fri' },
+  { key: 'saturday', label: 'Saturday', shortLabel: 'Sat' },
+  { key: 'sunday', label: 'Sunday', shortLabel: 'Sun' },
+];
+
+const DEFAULT_OPENING_HOURS: OpeningHours = {
+  monday: { open: '09:00', close: '20:00', closed: false },
+  tuesday: { open: '09:00', close: '20:00', closed: false },
+  wednesday: { open: '09:00', close: '20:00', closed: false },
+  thursday: { open: '09:00', close: '20:00', closed: false },
+  friday: { open: '09:00', close: '20:00', closed: false },
+  saturday: { open: '09:00', close: '20:00', closed: false },
+  sunday: { open: '10:00', close: '16:00', closed: true },
+};
 
 const BUSINESS_CATEGORIES = [
   { id: 'f13ce3c2-83e4-41be-92e3-3e47a913034c', name: 'CSC & Online Services (Cyber Cafe, CSC Center, Aadhaar, Banking Kiosk)' },
@@ -60,6 +83,7 @@ export const ProfileEditor: React.FC = () => {
   const [googleReviewUrl, setGoogleReviewUrl] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [bannerUrl, setBannerUrl] = useState('');
+  const [openingHours, setOpeningHours] = useState<OpeningHours>(DEFAULT_OPENING_HOURS);
 
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -83,6 +107,21 @@ export const ProfileEditor: React.FC = () => {
       setGoogleReviewUrl(currentBusiness.google_review_url || '');
       setLogoUrl(currentBusiness.logo_url || '');
       setBannerUrl(currentBusiness.banner_url || '');
+
+      if (currentBusiness.opening_hours && typeof currentBusiness.opening_hours === 'object') {
+        const raw = currentBusiness.opening_hours as any;
+        setOpeningHours({
+          monday: raw.monday ? { open: raw.monday.open || '09:00', close: raw.monday.close || '20:00', closed: Boolean(raw.monday.closed) } : DEFAULT_OPENING_HOURS.monday,
+          tuesday: raw.tuesday ? { open: raw.tuesday.open || '09:00', close: raw.tuesday.close || '20:00', closed: Boolean(raw.tuesday.closed) } : DEFAULT_OPENING_HOURS.tuesday,
+          wednesday: raw.wednesday ? { open: raw.wednesday.open || '09:00', close: raw.wednesday.close || '20:00', closed: Boolean(raw.wednesday.closed) } : DEFAULT_OPENING_HOURS.wednesday,
+          thursday: raw.thursday ? { open: raw.thursday.open || '09:00', close: raw.thursday.close || '20:00', closed: Boolean(raw.thursday.closed) } : DEFAULT_OPENING_HOURS.thursday,
+          friday: raw.friday ? { open: raw.friday.open || '09:00', close: raw.friday.close || '20:00', closed: Boolean(raw.friday.closed) } : DEFAULT_OPENING_HOURS.friday,
+          saturday: raw.saturday ? { open: raw.saturday.open || '09:00', close: raw.saturday.close || '20:00', closed: Boolean(raw.saturday.closed) } : DEFAULT_OPENING_HOURS.saturday,
+          sunday: raw.sunday ? { open: raw.sunday.open || '10:00', close: raw.sunday.close || '16:00', closed: raw.sunday.closed !== undefined ? Boolean(raw.sunday.closed) : true } : DEFAULT_OPENING_HOURS.sunday,
+        });
+      } else {
+        setOpeningHours(DEFAULT_OPENING_HOURS);
+      }
     } else if (isNew) {
       setName('');
       setSlug('');
@@ -100,8 +139,71 @@ export const ProfileEditor: React.FC = () => {
       setGoogleReviewUrl('');
       setLogoUrl('');
       setBannerUrl('');
+      setOpeningHours(DEFAULT_OPENING_HOURS);
     }
   }, [currentBusiness, isNew]);
+
+  const handleToggleClosed = (dayKey: keyof OpeningHours) => {
+    setOpeningHours((prev) => ({
+      ...prev,
+      [dayKey]: {
+        ...prev[dayKey],
+        closed: !prev[dayKey].closed,
+      },
+    }));
+  };
+
+  const handleTimeChange = (dayKey: keyof OpeningHours, field: 'open' | 'close', value: string) => {
+    setOpeningHours((prev) => ({
+      ...prev,
+      [dayKey]: {
+        ...prev[dayKey],
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleCopyMondayToAll = () => {
+    const mon = openingHours.monday;
+    setOpeningHours((prev) => ({
+      ...prev,
+      tuesday: { ...mon },
+      wednesday: { ...mon },
+      thursday: { ...mon },
+      friday: { ...mon },
+      saturday: { ...mon },
+    }));
+  };
+
+  const handleSetAllDaysOpen = () => {
+    setOpeningHours((prev) => {
+      const updated: any = {};
+      DAYS_OF_WEEK.forEach(({ key }) => {
+        updated[key] = { ...prev[key], closed: false };
+      });
+      return updated as OpeningHours;
+    });
+  };
+
+  const handleToggleSunday = () => {
+    setOpeningHours((prev) => ({
+      ...prev,
+      sunday: {
+        ...prev.sunday,
+        closed: !prev.sunday.closed,
+      },
+    }));
+  };
+
+  const handleSet24Hours = () => {
+    setOpeningHours((prev) => {
+      const updated: any = {};
+      DAYS_OF_WEEK.forEach(({ key }) => {
+        updated[key] = { open: '00:00', close: '23:59', closed: false };
+      });
+      return updated as OpeningHours;
+    });
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,6 +230,7 @@ export const ProfileEditor: React.FC = () => {
           google_review_url: googleReviewUrl,
           logo_url: logoUrl,
           banner_url: bannerUrl,
+          opening_hours: openingHours,
         });
 
         if (res.success) {
@@ -152,6 +255,7 @@ export const ProfileEditor: React.FC = () => {
           google_review_url: googleReviewUrl,
           logo_url: logoUrl,
           banner_url: bannerUrl,
+          opening_hours: openingHours,
         });
 
         if (res.success) {
@@ -503,6 +607,122 @@ export const ProfileEditor: React.FC = () => {
                 placeholderText="Upload Banner from Device / Camera"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Weekly Opening Hours & Shop Timing */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-brand-600" />
+                Store Opening Hours & Shop Timing
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Set opening and closing times for each day. Customers see this live when scanning your QR code.
+              </p>
+            </div>
+
+            {/* Quick Presets */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={handleCopyMondayToAll}
+                className="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors flex items-center gap-1"
+                title="Copy Monday's open & close times to Tue-Sat"
+              >
+                <Copy className="w-3 h-3 text-brand-600" />
+                <span>Copy Mon to All</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleSetAllDaysOpen}
+                className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-colors"
+              >
+                Open All 7 Days
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleSunday}
+                className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-colors ${
+                  openingHours.sunday.closed
+                    ? 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {openingHours.sunday.closed ? 'Sunday: Closed' : 'Sunday: Open'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSet24Hours}
+                className="px-2.5 py-1 text-[11px] font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors"
+              >
+                24 Hours Open
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-slate-50/80 rounded-2xl border border-slate-200 p-3 sm:p-4 space-y-2">
+            {DAYS_OF_WEEK.map(({ key, label }) => {
+              const day = openingHours[key];
+              return (
+                <div
+                  key={key}
+                  className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl border transition-all ${
+                    day.closed
+                      ? 'bg-slate-100/70 border-slate-200/90 text-slate-400'
+                      : 'bg-white border-slate-200 text-slate-800 shadow-2xs'
+                  }`}
+                >
+                  {/* Day Label & Open/Closed Status Toggle */}
+                  <div className="flex items-center gap-3 w-44">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleClosed(key)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                        day.closed
+                          ? 'bg-rose-100 text-rose-700 hover:bg-rose-200 border border-rose-200'
+                          : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-200'
+                      }`}
+                    >
+                      {day.closed ? 'Closed' : 'Open'}
+                    </button>
+                    <span className={`text-sm font-bold ${day.closed ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                      {label}
+                    </span>
+                  </div>
+
+                  {/* Timing Inputs */}
+                  {day.closed ? (
+                    <div className="text-xs font-medium text-slate-400 italic py-1 sm:text-right flex-1">
+                      Shop / Outlet is closed on this day
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-wrap sm:justify-end flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-slate-500 font-medium">Open:</span>
+                        <input
+                          type="time"
+                          value={day.open || '09:00'}
+                          onChange={(e) => handleTimeChange(key, 'open', e.target.value)}
+                          className="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-300 bg-white text-slate-800 focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                        />
+                      </div>
+                      <span className="text-slate-400 text-xs font-bold">to</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-slate-500 font-medium">Close:</span>
+                        <input
+                          type="time"
+                          value={day.close || '20:00'}
+                          onChange={(e) => handleTimeChange(key, 'close', e.target.value)}
+                          className="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-300 bg-white text-slate-800 focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
