@@ -20,141 +20,12 @@ import { Business } from '../../types/database';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../../lib/supabase';
 import { trackScanEvent, trackCustomerAction } from '../../lib/telemetry';
 
-// Showcase fallback demo business for grand-heritage
-const demoBiz: Business = {
-  id: 'biz-hotel-grand-1',
-  owner_id: 'owner-uuid-1',
-  name: 'The Grand Heritage Hotel & Fine Dine',
-  slug: 'grand-heritage',
-  short_description: 'Luxury Stays, Fine Dining & Authentic Indian Cuisine',
-  full_description:
-    'Welcome to The Grand Heritage Hotel & Fine Dine. We take pride in delivering regal Indian hospitality, curated culinary experiences, state-of-the-art suites, and dedicated banquet halls for weddings and conferences.',
-  phone: '+919931782577',
-  whatsapp: '919931782577',
-  email: 'contact.badalsarkar@gmail.com',
-  address: '42, Station Road, Near Central Plaza, Sector 14, New Delhi',
-  city: 'New Delhi',
-  google_maps_url: 'https://maps.google.com/?q=New+Delhi',
-  google_review_url: 'https://search.google.com/local/writereview?placeid=ChIJdd4hrwugrjsRmSrV3Vo6llI',
-  is_active: true,
-  status: 'active',
-  logo_url: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200&auto=format&fit=crop&q=80',
-  banner_url: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=1200&auto=format&fit=crop&q=80',
-  opening_hours: {
-    monday: { open: '08:00', close: '23:30', closed: false },
-    tuesday: { open: '08:00', close: '23:30', closed: false },
-    wednesday: { open: '08:00', close: '23:30', closed: false },
-    thursday: { open: '08:00', close: '23:30', closed: false },
-    friday: { open: '08:00', close: '23:30', closed: false },
-    saturday: { open: '08:00', close: '23:30', closed: false },
-    sunday: { open: '08:00', close: '23:30', closed: false },
-  },
-  menu_items: [
-    {
-      id: 'm1',
-      name: 'Paneer Butter Masala',
-      price: 320,
-      description: 'Rich cottage cheese cubes simmered in creamy cashew tomato makhani',
-      category: 'Curries',
-      image_url: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=400&auto=format&fit=crop&q=80',
-      is_available: true,
-    },
-    {
-      id: 'm2',
-      name: 'Dal Makhani Special',
-      price: 280,
-      description: 'Slow-cooked black lentils simmered overnight with butter and cream',
-      category: 'Curries',
-      image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400&auto=format&fit=crop&q=80',
-      is_available: true,
-    },
-    {
-      id: 'm3',
-      name: 'Tandoori Garlic Butter Naan',
-      price: 65,
-      description: 'Fresh clay-oven baked bread topped with roasted garlic and melted Amul butter',
-      category: 'Breads',
-      image_url: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=400&auto=format&fit=crop&q=80',
-      is_available: true,
-    },
-    {
-      id: 'm4',
-      name: 'Gulab Jamun with Rabri',
-      price: 150,
-      description: 'Warm syrup-soaked dumplings paired with chilled saffron rabri',
-      category: 'Desserts',
-      image_url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=400&auto=format&fit=crop&q=80',
-      is_available: true,
-    }
-  ],
-  services: [
-    {
-      id: 's1',
-      name: 'Executive Deluxe Room',
-      price: 3499,
-      duration: 'Per Night',
-      description: 'King bed, city view, high-speed Wi-Fi & complimentary buffet breakfast.',
-    },
-    {
-      id: 's2',
-      name: 'Banquet Hall for Celebrations',
-      price: 25000,
-      duration: '4-Hour Slot',
-      description: 'Decorated event space accommodating up to 150 guests.',
-    }
-  ],
-  photos: [
-    {
-      id: 'p1',
-      business_id: 'biz-hotel-grand-1',
-      photo_url: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&auto=format&fit=crop&q=80',
-      caption: 'Presidential Suite Interior',
-      sort_order: 1,
-      created_at: new Date().toISOString(),
-    },
-    {
-      id: 'p2',
-      business_id: 'biz-hotel-grand-1',
-      photo_url: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&auto=format&fit=crop&q=80',
-      caption: 'Courtyard Dining Space',
-      sort_order: 2,
-      created_at: new Date().toISOString(),
-    },
-    {
-      id: 'p3',
-      business_id: 'biz-hotel-grand-1',
-      photo_url: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800&auto=format&fit=crop&q=80',
-      caption: 'Hotel Grand Lobby & Reception',
-      sort_order: 3,
-      created_at: new Date().toISOString(),
-    }
-  ],
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-};
-
-// Privacy-friendly telemetry scan event logging (non-blocking)
-const logScan = async (businessId: string) => {
-  try {
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    await supabase.from('scan_events').insert({
-      business_id: businessId,
-      device_type: isMobile ? 'mobile' : 'desktop',
-      ip_hash: 'hash_' + Math.random().toString(36).substring(2, 10),
-      is_valid_scan: true,
-    });
-  } catch {
-    // Ignore background telemetry errors
-  }
-};
-
 export const CustomerLandingPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
 
   // Instant SWR Cache: read from localStorage immediately (0.001s render)
   const cacheKey = `smartqr_fast_cache_${slug}`;
   const getInitial = (): Business | null => {
-    if (slug === 'grand-heritage') return demoBiz;
     try {
       const cached = localStorage.getItem(cacheKey);
       return cached ? JSON.parse(cached) : null;
@@ -174,10 +45,8 @@ export const CustomerLandingPage: React.FC = () => {
     let isMounted = true;
 
     async function fetchFast() {
-      if (slug === 'grand-heritage') {
-        setBusiness(demoBiz);
+      if (!slug) {
         setLoading(false);
-        logScan(demoBiz.id);
         return;
       }
 
@@ -229,7 +98,7 @@ export const CustomerLandingPage: React.FC = () => {
 
     // Realtime Postgres sync: instant live update on customer phone without refreshing
     let channel: any = null;
-    if (slug && slug !== 'grand-heritage') {
+    if (slug) {
       try {
         channel = supabase
           .channel(`customer_live_${slug}`)

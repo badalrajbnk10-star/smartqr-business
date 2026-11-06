@@ -40,10 +40,6 @@ export const Navbar: React.FC = () => {
             <Link to="/pricing" className="text-sm font-medium text-slate-600 hover:text-brand-600 transition-colors">
               Pricing & Plans
             </Link>
-            <Link to="/b/grand-heritage" className="text-sm font-medium text-slate-600 hover:text-brand-600 transition-colors flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              Live Demo
-            </Link>
             <Link to="/support" className="text-sm font-medium text-slate-600 hover:text-brand-600 transition-colors">
               Support
             </Link>
@@ -126,13 +122,6 @@ export const Navbar: React.FC = () => {
             className="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:bg-slate-50"
           >
             Pricing & Plans
-          </Link>
-          <Link
-            to="/b/grand-heritage"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block px-3 py-2 rounded-md text-base font-medium text-amber-700 hover:bg-amber-50"
-          >
-            Live Customer Demo
           </Link>
           <Link
             to="/support"

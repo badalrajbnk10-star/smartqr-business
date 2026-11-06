@@ -217,7 +217,7 @@ export const ProfileEditor: React.FC = () => {
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Maa Durga CSC Center / Sharma Super Store"
+                placeholder="e.g. My Business / Store Name"
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
               />
             </div>

@@ -98,11 +98,11 @@ export const Home: React.FC = () => {
                 </Link>
 
                 <Link
-                  to="/b/grand-heritage"
+                  to="/features"
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-white hover:bg-slate-50 text-slate-800 font-semibold rounded-2xl border border-slate-300 shadow-sm transition-all text-sm sm:text-base"
                 >
                   <Smartphone className="w-4 h-4 text-slate-500" />
-                  <span>See Live Sample Profile</span>
+                  <span>Explore Features</span>
                 </Link>
               </div>
 
@@ -132,35 +132,35 @@ export const Home: React.FC = () => {
                   <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                     <div className="flex items-center gap-2.5">
                       <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center text-brand-700 font-bold">
-                        GH
+                        QR
                       </div>
                       <div>
-                        <h3 className="font-bold text-sm text-slate-900">Grand Heritage Hotel</h3>
+                        <h3 className="font-bold text-sm text-slate-900">Your Business Name</h3>
                         <p className="text-xs text-slate-500 flex items-center gap-1">
-                          <MapPin className="w-3 h-3 text-red-500" /> New Delhi
+                          <MapPin className="w-3 h-3 text-red-500" /> Your City, India
                         </p>
                       </div>
                     </div>
                     <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
-                      ★ 4.9 (340+)
+                      Verified
                     </span>
                   </div>
 
                   {/* QR Stand Preview */}
                   <div className="bg-gradient-to-b from-slate-900 to-indigo-950 rounded-2xl p-6 text-center text-white space-y-4 shadow-inner">
                     <p className="text-[11px] uppercase tracking-widest font-extrabold text-brand-300">
-                      SCAN FOR DIGITAL MENU & REVIEWS
+                      SCAN FOR DIGITAL SERVICES & REVIEWS
                     </p>
                     <div className="inline-block p-3.5 bg-white rounded-xl shadow-lg">
                       <img
-                        src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=https://smartqr.in/b/grand-heritage&color=1E1B4B"
-                        alt="Demo QR"
+                        src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=https://smartqr-business.vercel.app&color=1E1B4B"
+                        alt="SmartQR Sample"
                         className="w-36 h-36 rounded"
                       />
                     </div>
                     <div className="flex items-center justify-center gap-2 text-xs text-slate-300">
                       <PhoneCall className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Call: +91 9931782577</span>
+                      <span>Direct Customer Support</span>
                     </div>
                   </div>
 

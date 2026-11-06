@@ -50,7 +50,6 @@ export const Footer: React.FC = () => {
             <ul className="space-y-2 text-xs sm:text-sm">
               <li><Link to="/features" className="hover:text-white transition-colors">Dynamic QR Engine</Link></li>
               <li><Link to="/pricing" className="hover:text-white transition-colors">Pricing & UPI Plans</Link></li>
-              <li><Link to="/b/grand-heritage" className="hover:text-white transition-colors">Live Customer Demo</Link></li>
               <li><Link to="/login" className="hover:text-white transition-colors">Owner Portal</Link></li>
               <li><Link to="/super-admin" className="text-slate-500 hover:text-amber-400 transition-colors">Super Admin Access</Link></li>
             </ul>

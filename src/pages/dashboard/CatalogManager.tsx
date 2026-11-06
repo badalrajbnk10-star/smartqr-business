@@ -263,7 +263,7 @@ export const CatalogManager: React.FC = () => {
                   required
                   value={menuName}
                   onChange={(e) => setMenuName(e.target.value)}
-                  placeholder="e.g. Paneer Butter Masala"
+                  placeholder="e.g. Service or Product Name"
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
                 />
               </div>

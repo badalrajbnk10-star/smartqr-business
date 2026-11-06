@@ -281,7 +281,7 @@ export const DashboardOverview: React.FC = () => {
               Permanent Dynamic URL
             </span>
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs font-mono text-slate-700 break-all">
-              {currentBusiness?.qr_code?.permanent_url || `${window.location.origin}/b/grand-heritage`}
+              {currentBusiness?.qr_code?.permanent_url || (currentBusiness?.slug ? `${window.location.origin}/b/${currentBusiness.slug}` : 'No active QR code')}
             </div>
             <p className="text-[11px] text-slate-500 leading-relaxed">
               This permanent link will never change, ensuring all your printed collateral keeps working forever.

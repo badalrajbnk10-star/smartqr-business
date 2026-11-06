@@ -62,7 +62,7 @@ export const Features: React.FC = () => {
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Dynamic Cloud Sync</p>
             <div className="p-3 bg-brand-50 rounded-xl inline-block">
               <img
-                src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://smartqr.in/b/grand-heritage&color=312E81"
+                src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://smartqr-business.vercel.app&color=312E81"
                 alt="QR Sample"
                 className="w-36 h-36"
               />

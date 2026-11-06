@@ -37,7 +37,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
-  // Helper to safely load or auto-provision user profile from Supabase
+  // Helper to safely load user profile from Supabase
   const resolveUserProfile = async (authUser: any): Promise<Profile> => {
     try {
       const res = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${authUser.id}&select=*`, {
@@ -56,37 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Could not query profile table via REST:', err);
     }
 
-    // Auto-heal: If profile record is missing in profiles table, provision it now
-    const fallbackProfile: Profile = {
-      id: authUser.id,
-      email: authUser.email || '',
-      full_name:
-        authUser.user_metadata?.full_name ||
-        authUser.email?.split('@')[0]?.toUpperCase() ||
-        'Business Owner',
-      phone: authUser.user_metadata?.phone || '',
-      role: (authUser.user_metadata?.role as UserRole) || 'business_owner',
-      is_active: true,
-      created_at: authUser.created_at || new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    try {
-      await fetch(`${supabaseUrl}/rest/v1/profiles`, {
-        method: 'POST',
-        headers: {
-          'apikey': supabaseAnonKey,
-          'Authorization': `Bearer ${supabaseAnonKey}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'resolution=merge-duplicates',
-        },
-        body: JSON.stringify(fallbackProfile),
-      });
-    } catch (err) {
-      console.warn('Could not upsert fallback profile:', err);
-    }
-
-    return fallbackProfile;
+    throw new Error('Account record not found or has been deleted. Please register a new account.');
   };
 
   useEffect(() => {
@@ -122,10 +92,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           const { data: { session }, error } = await supabase.auth.getSession();
           if (session?.user && !error) {
-            const userProfile = await resolveUserProfile(session.user);
-            setUser(userProfile);
-            localStorage.setItem(ACTIVE_PROFILE_KEY, JSON.stringify(userProfile));
-          } else if (!cachedProfile) {
+            try {
+              const userProfile = await resolveUserProfile(session.user);
+              setUser(userProfile);
+              localStorage.setItem(ACTIVE_PROFILE_KEY, JSON.stringify(userProfile));
+            } catch {
+              localStorage.removeItem(ACTIVE_PROFILE_KEY);
+              await supabase.auth.signOut().catch(() => {});
+              setUser(null);
+            }
+          } else {
+            localStorage.removeItem(ACTIVE_PROFILE_KEY);
             setUser(null);
           }
         }
@@ -141,9 +118,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!isDemoMode) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
         if (session?.user) {
-          const userProfile = await resolveUserProfile(session.user);
-          setUser(userProfile);
-          localStorage.setItem(ACTIVE_PROFILE_KEY, JSON.stringify(userProfile));
+          try {
+            const userProfile = await resolveUserProfile(session.user);
+            setUser(userProfile);
+            localStorage.setItem(ACTIVE_PROFILE_KEY, JSON.stringify(userProfile));
+          } catch {
+            localStorage.removeItem(ACTIVE_PROFILE_KEY);
+            setUser(null);
+          }
         } else {
           localStorage.removeItem(ACTIVE_PROFILE_KEY);
           setUser(null);
@@ -161,66 +143,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const cleanEmail = email.trim().toLowerCase();
       const cleanPass = password.trim();
-
-      if (isDemoMode) {
-        // Super Admin verification check
-        if (requiredRole === 'super_admin') {
-          const cleanInput = cleanEmail.replace(/[\s-]/g, '');
-
-          const isBadal =
-            cleanInput === 'badalrajbnk10@gmail.com' ||
-            cleanInput === 'contact.badalsarkar@gmail.com' ||
-            cleanInput === '9931782577' ||
-            cleanInput === '+919931782577' ||
-            cleanInput === '919931782577';
-
-          const isDefaultAdmin =
-            cleanInput === 'admin@smartqr.in' ||
-            cleanInput === 'admin';
-
-          const isBadalAuthorized = isBadal && (cleanPass === 'Badalsarkar@22610' || cleanPass === 'Badalsarkar@2010');
-          const isDefaultAuthorized = isDefaultAdmin && (cleanPass === 'AdminSecurePassword2026!' || cleanPass === 'admin' || cleanPass.length >= 6);
-
-          if (isBadalAuthorized || isDefaultAuthorized) {
-            const adminUser: Profile = {
-              id: 'super-admin-root-id',
-              email: 'badalrajbnk10@gmail.com',
-              full_name: 'Badal Sarkar',
-              phone: '+91 9931782577',
-              role: 'super_admin',
-              is_active: true,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            };
-            setUser(adminUser);
-            localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(adminUser));
-            return { success: true };
-          } else {
-            return {
-              success: false,
-              error: 'Invalid Super Admin credentials. Access denied.',
-            };
-          }
-        }
-
-        // Standard Business Owner login
-        if (cleanPass.length < 6) {
-          return { success: false, error: 'Password must be at least 6 characters.' };
-        }
-
-        const ownerUser: Profile = {
-          id: `owner-${Math.random().toString(36).substring(2, 9)}`,
-          email: cleanEmail,
-          full_name: cleanEmail.split('@')[0].toUpperCase(),
-          role: 'business_owner',
-          is_active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        setUser(ownerUser);
-        localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(ownerUser));
-        return { success: true };
-      }
 
       // Real Supabase Auth (Supports both Email and Mobile Number login)
       let candidateEmails: string[] = [];
@@ -299,7 +221,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: lastError };
       }
 
-      const userProfile = await resolveUserProfile(authUser);
+      let userProfile: Profile;
+      try {
+        userProfile = await resolveUserProfile(authUser);
+      } catch (profileErr: any) {
+        await supabase.auth.signOut().catch(() => {});
+        return { success: false, error: profileErr.message || 'Account not found. Please create a new account.' };
+      }
 
       // Allow super_admin to access all views
       if (requiredRole && requiredRole === 'super_admin' && userProfile.role !== 'super_admin') {

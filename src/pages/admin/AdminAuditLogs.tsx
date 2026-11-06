@@ -34,17 +34,7 @@ export const AdminAuditLogs: React.FC = () => {
 
       const entries: AuditLogEntry[] = [];
 
-      // System root initialization event
-      entries.push({
-        id: 'sys-root',
-        actor: 'Super Admin (badalrajbnk10@gmail.com)',
-        action: 'SUPER_ADMIN_LOGIN',
-        target: 'Root Admin Console',
-        details: 'Authorized master session with encrypted biometric credentials.',
-        timestamp: new Date().toLocaleString(),
-      });
-
-      // Events from business registrations
+      // Real events from business registrations
       for (const b of rawBiz) {
         entries.push({
           id: `biz-${b.id}`,
@@ -126,6 +116,12 @@ export const AdminAuditLogs: React.FC = () => {
                   <td colSpan={5} className="py-12 text-center text-slate-500 font-sans">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto text-amber-500 mb-2" />
                     <span>Loading real database audit trail...</span>
+                  </td>
+                </tr>
+              ) : logs.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-slate-500 font-sans">
+                    <span>No audit events found. Platform database is completely clean.</span>
                   </td>
                 </tr>
               ) : (
