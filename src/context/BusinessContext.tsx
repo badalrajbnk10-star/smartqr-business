@@ -562,18 +562,74 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           };
         }
 
-        const { error } = await supabase.from('businesses').update(bizUpdates).eq('id', id);
-        if (error) return { success: false, error: error.message };
+        // Direct REST PATCH fallback for resilient cloud updates
+        let patchOk = false;
+        try {
+          const patchRes = await fetch(`${supabaseUrl}/rest/v1/businesses?id=eq.${id}`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': supabaseAnonKey,
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=representation',
+            },
+            body: JSON.stringify(bizUpdates),
+          });
+          if (patchRes.ok) {
+            patchOk = true;
+          }
+        } catch (fetchErr) {
+          console.warn('Direct REST PATCH warning, falling back to supabase client:', fetchErr);
+        }
+
+        if (!patchOk) {
+          const { error } = await supabase.from('businesses').update(bizUpdates).eq('id', id);
+          if (error) return { success: false, error: error.message };
+        }
+
+        // Also sync logo with qr_codes table if logo_url was updated
+        if (bizUpdates.logo_url !== undefined) {
+          try {
+            await fetch(`${supabaseUrl}/rest/v1/qr_codes?business_id=eq.${id}`, {
+              method: 'PATCH',
+              headers: {
+                'apikey': supabaseAnonKey,
+                'Authorization': `Bearer ${supabaseAnonKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ logo_url: bizUpdates.logo_url }),
+            });
+          } catch {}
+        }
+
+        const merged = {
+          ...(currentBusiness || {}),
+          ...bizUpdates,
+          photos: Array.isArray(photos) ? photos : (currentBusiness?.photos || []),
+          updated_at: new Date().toISOString()
+        } as Business;
+
         if (currentBusiness && currentBusiness.id === id) {
-          const merged = {
-            ...currentBusiness,
-            ...bizUpdates,
-            photos: Array.isArray(photos) ? photos : currentBusiness.photos,
-            updated_at: new Date().toISOString()
-          };
           setCurrentBusiness(merged);
           localStorage.setItem(ACTIVE_BIZ_KEY, JSON.stringify(merged));
         }
+
+        // Clear and update the fast cache key for immediate scan freshness
+        const targetSlug = bizUpdates.slug || currentBusiness?.slug;
+        if (targetSlug) {
+          const cleanSlug = targetSlug.trim().toLowerCase().replace(/\/$/, '');
+          try {
+            localStorage.removeItem(`smartqr_fast_cache_${cleanSlug}`);
+            localStorage.removeItem(`smartqr_fast_cache_${targetSlug}`);
+            localStorage.setItem(`smartqr_fast_cache_${cleanSlug}`, JSON.stringify(merged));
+          } catch {}
+        }
+
+        // Broadcast live update event so open scan tabs update without page refresh
+        try {
+          window.dispatchEvent(new CustomEvent('smartqr_business_updated', { detail: merged }));
+        } catch {}
+
         await loadData();
         return { success: true };
       }

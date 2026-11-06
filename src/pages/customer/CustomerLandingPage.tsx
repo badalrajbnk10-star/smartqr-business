@@ -52,9 +52,14 @@ export const CustomerLandingPage: React.FC = () => {
 
       try {
         const cleanSlug = (slug || '').trim().toLowerCase().replace(/\/$/, '');
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanSlug);
+        const filterParam = isUuid
+          ? `or=(id.eq.${cleanSlug},slug.eq.${cleanSlug},slug.ilike.${cleanSlug})`
+          : `or=(slug.eq.${cleanSlug},slug.ilike.${cleanSlug})`;
+
         let data: any = null;
         try {
-          const res = await fetch(`${supabaseUrl}/rest/v1/businesses?or=(slug.eq.${cleanSlug},slug.ilike.${cleanSlug},id.eq.${cleanSlug})&select=*`, {
+          const res = await fetch(`${supabaseUrl}/rest/v1/businesses?${filterParam}&select=*`, {
             headers: {
               'apikey': supabaseAnonKey,
               'Authorization': `Bearer ${supabaseAnonKey}`,
@@ -72,11 +77,13 @@ export const CustomerLandingPage: React.FC = () => {
         } catch {}
 
         if (!data) {
-          const fallback = await supabase
-            .from('businesses')
-            .select('*')
-            .or(`slug.ilike.${cleanSlug},id.eq.${cleanSlug}`)
-            .maybeSingle();
+          let fbQuery = supabase.from('businesses').select('*');
+          if (isUuid) {
+            fbQuery = fbQuery.or(`id.eq.${cleanSlug},slug.ilike.${cleanSlug}`);
+          } else {
+            fbQuery = fbQuery.or(`slug.ilike.${cleanSlug},slug.eq.${cleanSlug}`);
+          }
+          const fallback = await fbQuery.maybeSingle();
           data = fallback.data;
         }
 
@@ -101,6 +108,18 @@ export const CustomerLandingPage: React.FC = () => {
     }
 
     fetchFast();
+
+    // Listen for instant local updates across tabs/dashboard
+    const handleLocalBusinessUpdated = (e: any) => {
+      const updated = e.detail;
+      if (updated && (updated.slug === slug || updated.id === slug) && isMounted) {
+        setBusiness(updated);
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(updated));
+        } catch {}
+      }
+    };
+    window.addEventListener('smartqr_business_updated', handleLocalBusinessUpdated);
 
     // Realtime Postgres sync: instant live update on customer phone without refreshing
     let channel: any = null;
@@ -131,6 +150,7 @@ export const CustomerLandingPage: React.FC = () => {
 
     return () => {
       isMounted = false;
+      window.removeEventListener('smartqr_business_updated', handleLocalBusinessUpdated);
       if (channel) {
         supabase.removeChannel(channel).catch(() => {});
       }
