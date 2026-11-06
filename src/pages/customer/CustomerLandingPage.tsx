@@ -182,14 +182,17 @@ export const CustomerLandingPage: React.FC = () => {
       }
 
       try {
-        // Ultra-fast direct REST query (0.01s lightning speed, no locks)
+        // Ultra-fast direct REST query (0.01s lightning speed, no locks, never cached)
         let data: any = null;
         try {
           const res = await fetch(`${supabaseUrl}/rest/v1/businesses?slug=eq.${encodeURIComponent(slug || '')}&select=*`, {
             headers: {
               'apikey': supabaseAnonKey,
               'Authorization': `Bearer ${supabaseAnonKey}`,
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
             },
+            cache: 'no-store',
           });
           if (res.ok) {
             const arr = await res.json();
@@ -224,8 +227,38 @@ export const CustomerLandingPage: React.FC = () => {
 
     fetchFast();
 
+    // Realtime Postgres sync: instant live update on customer phone without refreshing
+    let channel: any = null;
+    if (slug && slug !== 'grand-heritage') {
+      try {
+        channel = supabase
+          .channel(`customer_live_${slug}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'businesses',
+              filter: `slug=eq.${slug}`,
+            },
+            (payload: any) => {
+              if (payload?.new && isMounted) {
+                setBusiness(payload.new as Business);
+                try {
+                  localStorage.setItem(cacheKey, JSON.stringify(payload.new));
+                } catch {}
+              }
+            }
+          )
+          .subscribe();
+      } catch {}
+    }
+
     return () => {
       isMounted = false;
+      if (channel) {
+        supabase.removeChannel(channel).catch(() => {});
+      }
     };
   }, [slug]);
 
@@ -342,11 +375,14 @@ export const CustomerLandingPage: React.FC = () => {
     );
   }
 
-  const menuCategories = ['All', ...Array.from(new Set((business.menu_items || []).map((m) => m.category)))];
+  const servicesList = business.services || [];
+  const menuList = business.menu_items || [];
+  const totalServicesAndItems = servicesList.length + menuList.length;
+  const menuCategories = ['All', ...Array.from(new Set(menuList.map((m) => m.category)))];
   const filteredMenu =
     menuFilter === 'All'
-      ? business.menu_items || []
-      : (business.menu_items || []).filter((m) => m.category === menuFilter);
+      ? menuList
+      : menuList.filter((m) => m.category === menuFilter);
 
   return (
     <div className="min-h-screen bg-slate-100 flex justify-center pb-20">
@@ -477,7 +513,7 @@ export const CustomerLandingPage: React.FC = () => {
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
-              Menu & Catalog ({(business.menu_items || []).length})
+              Services ({totalServicesAndItems})
             </button>
             <button
               onClick={() => setActiveTab('photos')}
@@ -557,60 +593,119 @@ export const CustomerLandingPage: React.FC = () => {
 
           {activeTab === 'menu' && (
             <div className="space-y-4">
-              {menuCategories.length > 1 && (
-                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                  {menuCategories.map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setMenuFilter(cat)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
-                        menuFilter === cat
-                          ? 'bg-brand-600 text-white'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
+              {/* 1. Services List (Instant Display for CSC, Salons, Clinics, Consulting, Services) */}
+              {servicesList.length > 0 && (
+                <div className="space-y-2.5">
+                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Services ({servicesList.length})
+                  </h3>
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {servicesList.map((svc) => (
+                      <div
+                        key={svc.id}
+                        className="p-3.5 bg-white border border-slate-200/90 rounded-2xl flex items-center justify-between gap-3 shadow-xs hover:border-slate-300 transition-colors"
+                      >
+                        <div className="space-y-1 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-xs font-bold text-slate-900">{svc.name}</h4>
+                            {svc.duration && (
+                              <span className="text-[10px] text-brand-700 bg-brand-50 border border-brand-100 px-2 py-0.5 rounded-full font-semibold">
+                                {svc.duration}
+                              </span>
+                            )}
+                          </div>
+                          {svc.description && (
+                            <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                              {svc.description}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          {svc.price !== undefined && svc.price !== null && (
+                            <span className="text-sm font-black text-brand-700">₹{svc.price}</span>
+                          )}
+                          <a
+                            href={`https://wa.me/${(business.whatsapp || business.phone)?.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi ${business.name}, I would like to inquire about: ${svc.name}`)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-bold flex items-center gap-1 shadow-xs transition-colors"
+                          >
+                            <MessageCircle className="w-3 h-3" />
+                            <span>Enquire</span>
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              {filteredMenu.length === 0 ? (
-                <div className="py-12 text-center text-slate-400 space-y-2">
-                  <Utensils className="w-8 h-8 mx-auto text-slate-300" />
-                  <p className="text-xs">No catalog items available yet.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3">
-                  {filteredMenu.map((item) => (
-                    <div
-                      key={item.id}
-                      className="p-3 bg-white border border-slate-200/80 rounded-2xl flex gap-3 shadow-xs hover:border-slate-300 transition-colors"
-                    >
-                      {item.image_url && (
-                        <img
-                          src={item.image_url}
-                          alt={item.name}
-                          loading="lazy"
-                          className="w-16 h-16 rounded-xl object-cover shrink-0 bg-slate-100"
-                        />
-                      )}
-                      <div className="flex-1 flex flex-col justify-between">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-900">{item.name}</h4>
-                          {item.description && (
-                            <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{item.description}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between mt-1">
-                          <span className="text-xs font-black text-brand-700">₹{item.price}</span>
-                          <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full">
-                            Available
-                          </span>
+              {/* 2. Menu / Products List (For Restaurants, Cafes, Bakeries) */}
+              {menuList.length > 0 && (
+                <div className="space-y-3 pt-1">
+                  {servicesList.length > 0 && (
+                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Menu & Products ({menuList.length})
+                    </h3>
+                  )}
+                  {menuCategories.length > 1 && (
+                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                      {menuCategories.map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => setMenuFilter(cat)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+                            menuFilter === cat
+                              ? 'bg-brand-600 text-white'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 gap-3">
+                    {filteredMenu.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-3 bg-white border border-slate-200/80 rounded-2xl flex gap-3 shadow-xs hover:border-slate-300 transition-colors"
+                      >
+                        {item.image_url && (
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            loading="lazy"
+                            className="w-16 h-16 rounded-xl object-cover shrink-0 bg-slate-100"
+                          />
+                        )}
+                        <div className="flex-1 flex flex-col justify-between">
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-900">{item.name}</h4>
+                            {item.description && (
+                              <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{item.description}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-xs font-black text-brand-700">₹{item.price}</span>
+                            <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full">
+                              Available
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 3. Empty State if Neither Services nor Menu items exist */}
+              {servicesList.length === 0 && menuList.length === 0 && (
+                <div className="py-12 text-center text-slate-400 space-y-2">
+                  <Utensils className="w-8 h-8 mx-auto text-slate-300" />
+                  <p className="text-xs">No services or catalog items listed yet.</p>
                 </div>
               )}
             </div>

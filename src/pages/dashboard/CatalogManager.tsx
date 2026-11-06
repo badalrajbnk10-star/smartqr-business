@@ -81,6 +81,9 @@ export const CatalogManager: React.FC = () => {
     }
 
     await updateBusiness(currentBusiness.id, { menu_items: updated });
+    try {
+      localStorage.removeItem(`smartqr_fast_cache_${currentBusiness.slug}`);
+    } catch {}
     setSaving(false);
     setEditingMenuId(null);
     setMenuName('');
@@ -96,6 +99,9 @@ export const CatalogManager: React.FC = () => {
     if (editingMenuId === id) handleCancelEditMenu();
     const updated = menuItems.filter((m) => m.id !== id);
     await updateBusiness(currentBusiness.id, { menu_items: updated });
+    try {
+      localStorage.removeItem(`smartqr_fast_cache_${currentBusiness.slug}`);
+    } catch {}
   };
 
   const handleStartEditService = (svc: BusinessService) => {
@@ -127,6 +133,9 @@ export const CatalogManager: React.FC = () => {
     };
     const updated = [...services, newSvc];
     await updateBusiness(currentBusiness.id, { services: updated });
+    try {
+      localStorage.removeItem(`smartqr_fast_cache_${currentBusiness.slug}`);
+    } catch {}
     setSaving(false);
     setSuccess(true);
     setTimeout(() => setSuccess(false), 3000);
@@ -162,6 +171,9 @@ export const CatalogManager: React.FC = () => {
     }
 
     await updateBusiness(currentBusiness.id, { services: updated });
+    try {
+      localStorage.removeItem(`smartqr_fast_cache_${currentBusiness.slug}`);
+    } catch {}
     setSaving(false);
     setEditingSvcId(null);
     setSvcName('');
@@ -177,6 +189,9 @@ export const CatalogManager: React.FC = () => {
     if (editingSvcId === id) handleCancelEditService();
     const updated = services.filter((s) => s.id !== id);
     await updateBusiness(currentBusiness.id, { services: updated });
+    try {
+      localStorage.removeItem(`smartqr_fast_cache_${currentBusiness.slug}`);
+    } catch {}
   };
 
   return (

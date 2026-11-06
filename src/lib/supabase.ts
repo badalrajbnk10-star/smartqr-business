@@ -34,6 +34,12 @@ export const supabase = {
   from(table: string) {
     return getSupabase().from(table);
   },
+  channel(name: string) {
+    return getSupabase().channel(name);
+  },
+  removeChannel(channel: any) {
+    return getSupabase().removeChannel(channel);
+  },
 };
 
 // Seed default mock plans for instant local testing and offline capability

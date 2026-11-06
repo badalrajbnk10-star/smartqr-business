@@ -213,41 +213,51 @@ export const SubscriptionBilling: React.FC = () => {
           Payment Invoices & Receipts
         </h3>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-slate-100 text-slate-400 font-semibold uppercase text-[10px]">
-                <th className="py-2.5">Date</th>
-                <th className="py-2.5">Description</th>
-                <th className="py-2.5">Amount</th>
-                <th className="py-2.5">Method</th>
-                <th className="py-2.5">Status</th>
-                <th className="py-2.5 text-right">Receipt</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              <tr>
-                <td className="py-3 font-mono">{new Date().toLocaleDateString()}</td>
-                <td className="py-3 font-medium">SmartQR Monthly Subscription</td>
-                <td className="py-3 font-bold text-slate-900">₹99.00</td>
-                <td className="py-3">UPI AutoPay</td>
-                <td className="py-3">
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px]">
-                    Captured
-                  </span>
-                </td>
-                <td className="py-3 text-right">
-                  <button
-                    onClick={() => alert('Tax invoice PDF generated.')}
-                    className="text-brand-600 font-bold hover:underline"
-                  >
-                    Download PDF
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        {subscription?.status === 'active' && subscription?.plan_id !== 'plan-trial' ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-100 text-slate-400 font-semibold uppercase text-[10px]">
+                  <th className="py-2.5">Date</th>
+                  <th className="py-2.5">Description</th>
+                  <th className="py-2.5">Amount</th>
+                  <th className="py-2.5">Method</th>
+                  <th className="py-2.5">Status</th>
+                  <th className="py-2.5 text-right">Receipt</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                <tr>
+                  <td className="py-3 font-mono">{new Date(subscription.created_at || Date.now()).toLocaleDateString()}</td>
+                  <td className="py-3 font-medium">SmartQR {activePlan?.name || 'Starter'} Monthly Subscription</td>
+                  <td className="py-3 font-bold text-slate-900">₹{((activePlan?.price_paise || 9900) / 100).toFixed(2)}</td>
+                  <td className="py-3">UPI AutoPay</td>
+                  <td className="py-3">
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px]">
+                      Captured
+                    </span>
+                  </td>
+                  <td className="py-3 text-right">
+                    <button
+                      onClick={() => alert(`Tax invoice generated for ${activePlan?.name || 'Starter'} plan.`)}
+                      className="text-brand-600 font-bold hover:underline"
+                    >
+                      Download PDF
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="py-8 text-center text-slate-400 space-y-2 border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+            <Clock className="w-6 h-6 mx-auto text-slate-300" />
+            <p className="text-xs font-bold text-slate-700">No payment invoices yet</p>
+            <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+              Your business is currently operating on the 24-Hour Free Trial (₹0.00). Invoices and GST receipts will appear here automatically once you authorize a paid AutoPay plan.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
