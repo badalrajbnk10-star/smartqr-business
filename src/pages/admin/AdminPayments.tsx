@@ -1,26 +1,82 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Search, RefreshCw, Activity, ShieldCheck, Clock } from 'lucide-react';
-import { supabaseUrl, supabaseAnonKey } from '../../lib/supabase';
+import {
+  CreditCard,
+  Search,
+  RefreshCw,
+  Activity,
+  ShieldCheck,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Copy,
+  Check,
+  MessageCircle,
+  Plus,
+  X,
+  Sparkles,
+  ArrowRight
+} from 'lucide-react';
+import confetti from 'canvas-confetti';
+import { supabaseUrl, supabaseAnonKey, DEFAULT_PLANS } from '../../lib/supabase';
 
-interface RealPaymentRecord {
+interface PendingPaymentItem {
+  businessId: string;
+  businessName: string;
+  businessSlug: string;
+  ownerName: string;
+  ownerEmail: string;
+  ownerPhone: string;
+  planId: string;
+  planName: string;
+  amountPaise: number;
+  utr: string;
+  submittedAt: string;
+  rawOpeningHours: any;
+}
+
+interface CapturedPaymentRecord {
   id: string;
+  businessName: string;
   customerName: string;
   customerEmail: string;
   customerPhone: string;
+  planName: string;
   amountPaise: number;
-  status: 'captured' | 'failed' | 'pending';
-  razorpayPaymentId: string;
-  razorpaySubId: string;
-  mandateStatus: 'authorized' | 'active' | 'failed';
+  utr: string;
+  method: string;
+  status: 'captured' | 'pending';
   date: string;
 }
 
+interface SimpleBusinessOption {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  ownerName: string;
+  rawOpeningHours: any;
+}
+
 export const AdminPayments: React.FC = () => {
-  const [payments, setPayments] = useState<RealPaymentRecord[]>([]);
+  const [pendingPayments, setPendingPayments] = useState<PendingPaymentItem[]>([]);
+  const [capturedPayments, setCapturedPayments] = useState<CapturedPaymentRecord[]>([]);
+  const [allBusinesses, setAllBusinesses] = useState<SimpleBusinessOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [copiedUtr, setCopiedUtr] = useState<string | null>(null);
 
-  const fetchRealPayments = async () => {
+  // Manual Activation Modal State
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [manualBizId, setManualBizId] = useState('');
+  const [manualPlanId, setManualPlanId] = useState(DEFAULT_PLANS[1]?.id || DEFAULT_PLANS[0]?.id);
+  const [manualDurationDays, setManualDurationDays] = useState('30');
+  const [manualNote, setManualNote] = useState('');
+  const [manualSubmitting, setManualSubmitting] = useState(false);
+
+  const fetchRealData = async () => {
     setLoading(true);
     try {
       const headers = {
@@ -29,209 +85,614 @@ export const AdminPayments: React.FC = () => {
         'Cache-Control': 'no-cache',
       };
 
-      const [subRes, bizRes, profilesRes] = await Promise.all([
-        fetch(`${supabaseUrl}/rest/v1/subscriptions?select=*`, { headers }).catch(() => null),
-        fetch(`${supabaseUrl}/rest/v1/businesses?select=*`, { headers }),
+      const [bizRes, profilesRes, subsRes] = await Promise.all([
+        fetch(`${supabaseUrl}/rest/v1/businesses?select=*&order=created_at.desc`, { headers }),
         fetch(`${supabaseUrl}/rest/v1/profiles?select=*`, { headers }),
+        fetch(`${supabaseUrl}/rest/v1/subscriptions?select=*`, { headers }).catch(() => null),
       ]);
 
-      const subs = (subRes && subRes.ok) ? await subRes.json() : [];
       const businesses = bizRes.ok ? await bizRes.json() : [];
       const profiles = profilesRes.ok ? await profilesRes.json() : [];
+      const subs = subsRes && subsRes.ok ? await subsRes.json() : [];
 
       const profilesMap = new Map<string, any>();
       for (const p of profiles) profilesMap.set(p.id, p);
 
-      const records: RealPaymentRecord[] = [];
+      const pending: PendingPaymentItem[] = [];
+      const captured: CapturedPaymentRecord[] = [];
+      const bizOptions: SimpleBusinessOption[] = [];
 
-      // Add subscriptions from table
-      for (const s of subs) {
-        const owner = profilesMap.get(s.business_owner_id);
-        records.push({
-          id: s.id,
-          customerName: owner?.full_name || 'Business Owner',
-          customerEmail: owner?.email || 'N/A',
-          customerPhone: owner?.phone || 'N/A',
-          amountPaise: s.price_paise || 9900,
-          status: s.status === 'active' ? 'captured' : 'pending',
-          razorpayPaymentId: s.razorpay_payment_id || `sub_${s.id.substring(0, 8)}`,
-          razorpaySubId: s.razorpay_subscription_id || `mandate_${s.id.substring(0, 8)}`,
-          mandateStatus: s.autopay_mandate_status || 'active',
-          date: s.created_at ? new Date(s.created_at).toLocaleString() : 'N/A',
-        });
-      }
-
-      // Add subscriptions from businesses opening_hours._subscription
       for (const b of businesses) {
-        const sub = b.opening_hours?._subscription;
-        if (sub && sub.status === 'active') {
-          const owner = profilesMap.get(b.owner_id);
-          records.push({
-            id: sub.id || `sub-${b.id}`,
-            customerName: owner?.full_name || b.name,
-            customerEmail: owner?.email || b.email || 'N/A',
-            customerPhone: owner?.phone || b.phone || 'N/A',
-            amountPaise: sub.price_paise || 9900,
+        const owner = profilesMap.get(b.owner_id);
+        const ownerName = owner?.full_name || 'Business Owner';
+        const ownerEmail = owner?.email || b.email || 'N/A';
+        const ownerPhone = owner?.phone || b.phone || 'N/A';
+        const openingHours = b.opening_hours || {};
+
+        bizOptions.push({
+          id: b.id,
+          name: b.name || 'Untitled Business',
+          slug: b.slug,
+          status: b.status || 'trialing',
+          ownerName,
+          rawOpeningHours: openingHours,
+        });
+
+        // 1. Check for Pending Manual Payment Submission
+        const pPay = openingHours._pending_payment;
+        if (pPay && pPay.status === 'pending') {
+          pending.push({
+            businessId: b.id,
+            businessName: b.name || 'Untitled Business',
+            businessSlug: b.slug,
+            ownerName: pPay.customer_name || ownerName,
+            ownerEmail: pPay.customer_email || ownerEmail,
+            ownerPhone: pPay.customer_phone || ownerPhone,
+            planId: pPay.plan_id || DEFAULT_PLANS[0].id,
+            planName: pPay.plan_name || 'Starter',
+            amountPaise: Number(pPay.amount_paise) || 9900,
+            utr: pPay.utr || 'N/A',
+            submittedAt: pPay.submitted_at || b.updated_at || b.created_at,
+            rawOpeningHours: openingHours,
+          });
+        }
+
+        // 2. Check for Captured Active Subscriptions
+        const activeSub = openingHours._subscription;
+        if (b.status === 'active' || (activeSub && activeSub.status === 'active')) {
+          captured.push({
+            id: `biz-sub-${b.id}`,
+            businessName: b.name,
+            customerName: ownerName,
+            customerEmail: ownerEmail,
+            customerPhone: ownerPhone,
+            planName: activeSub?.plan_name || 'Starter Plan',
+            amountPaise: Number(activeSub?.amount_paise) || 9900,
+            utr: activeSub?.utr || activeSub?.payment_id || `UPI-${b.id.substring(0, 8)}`,
+            method: activeSub?.payment_method || 'Manual UPI Transfer',
             status: 'captured',
-            razorpayPaymentId: sub.razorpay_payment_id || `pay_${b.id.substring(0, 8)}`,
-            razorpaySubId: sub.razorpay_subscription_id || `sub_${b.id.substring(0, 8)}`,
-            mandateStatus: 'active',
-            date: sub.created_at ? new Date(sub.created_at).toLocaleString() : 'N/A',
+            date: activeSub?.activated_at ? new Date(activeSub.activated_at).toLocaleString() : new Date(b.created_at).toLocaleString(),
           });
         }
       }
 
-      setPayments(records);
+      // Add records from subscriptions table if any
+      for (const s of subs) {
+        if (s.status === 'active') {
+          const owner = profilesMap.get(s.business_owner_id);
+          captured.push({
+            id: s.id,
+            businessName: 'Business Profile',
+            customerName: owner?.full_name || 'Business Owner',
+            customerEmail: owner?.email || 'N/A',
+            customerPhone: owner?.phone || 'N/A',
+            planName: 'AutoPay Subscription',
+            amountPaise: s.price_paise || 9900,
+            utr: s.razorpay_payment_id || `sub_${s.id.substring(0, 8)}`,
+            method: 'UPI AutoPay',
+            status: 'captured',
+            date: s.created_at ? new Date(s.created_at).toLocaleString() : 'N/A',
+          });
+        }
+      }
+
+      setPendingPayments(pending);
+      setCapturedPayments(captured);
+      setAllBusinesses(bizOptions);
+      if (bizOptions.length > 0 && !manualBizId) {
+        setManualBizId(bizOptions[0].id);
+      }
     } catch (err) {
-      console.error('Failed to load real payments:', err);
+      console.error('Failed to load admin payments:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchRealPayments();
+    fetchRealData();
   }, []);
 
-  const filtered = payments.filter(
+  const handleCopyUtr = (utr: string) => {
+    navigator.clipboard.writeText(utr);
+    setCopiedUtr(utr);
+    setTimeout(() => setCopiedUtr(null), 2500);
+  };
+
+  // Approve & Activate Manual Payment
+  const handleApprovePayment = async (item: PendingPaymentItem) => {
+    setProcessingId(item.businessId);
+    setActionError(null);
+    setActionSuccess(null);
+
+    const now = new Date();
+    const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    const updatedHours = {
+      ...item.rawOpeningHours,
+      _subscription: {
+        plan_id: item.planId,
+        plan_name: item.planName,
+        amount_paise: item.amountPaise,
+        status: 'active',
+        utr: item.utr,
+        payment_method: 'Manual UPI Transfer',
+        activated_at: now.toISOString(),
+        expires_at: periodEnd.toISOString(),
+      },
+      _pending_payment: null, // Clear pending state
+    };
+
+    try {
+      const res = await fetch(`${supabaseUrl}/rest/v1/businesses?id=eq.${item.businessId}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
+          status: 'active',
+          opening_hours: updatedHours,
+        }),
+      });
+
+      if (res.ok) {
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        setActionSuccess(
+          `Payment verified & approved! "${item.businessName}" is now ACTIVE on ${item.planName} Plan for 30 days.`
+        );
+        await fetchRealData();
+      } else {
+        setActionError('Failed to activate business status on Supabase server.');
+      }
+    } catch (err: any) {
+      setActionError(err.message || 'Network error while approving payment.');
+    } finally {
+      setProcessingId(null);
+      setTimeout(() => setActionSuccess(null), 5000);
+    }
+  };
+
+  // Reject Manual Payment
+  const handleRejectPayment = async (item: PendingPaymentItem) => {
+    if (!window.confirm(`Are you sure you want to reject UTR "${item.utr}" for "${item.businessName}"?`)) {
+      return;
+    }
+
+    setProcessingId(item.businessId);
+    setActionError(null);
+    setActionSuccess(null);
+
+    const updatedHours = {
+      ...item.rawOpeningHours,
+      _pending_payment: {
+        ...item.rawOpeningHours?._pending_payment,
+        status: 'rejected',
+        rejected_at: new Date().toISOString(),
+      },
+    };
+
+    try {
+      const res = await fetch(`${supabaseUrl}/rest/v1/businesses?id=eq.${item.businessId}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
+          opening_hours: updatedHours,
+        }),
+      });
+
+      if (res.ok) {
+        setActionSuccess(`Payment rejected for "${item.businessName}".`);
+        await fetchRealData();
+      } else {
+        setActionError('Failed to update rejection status.');
+      }
+    } catch (err: any) {
+      setActionError(err.message || 'Network error.');
+    } finally {
+      setProcessingId(null);
+      setTimeout(() => setActionSuccess(null), 4000);
+    }
+  };
+
+  // Super Admin: Direct Manual Business Activation
+  const handleManualActivationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualBizId) return;
+
+    setManualSubmitting(true);
+    setActionError(null);
+    setActionSuccess(null);
+
+    const targetBiz = allBusinesses.find((b) => b.id === manualBizId);
+    const selectedPlan = DEFAULT_PLANS.find((p) => p.id === manualPlanId) || DEFAULT_PLANS[0];
+
+    const now = new Date();
+    const days = parseInt(manualDurationDays) || 30;
+    const periodEnd = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+
+    const currentHours = targetBiz?.rawOpeningHours || {};
+    const updatedHours = {
+      ...currentHours,
+      _subscription: {
+        plan_id: selectedPlan.id,
+        plan_name: selectedPlan.name,
+        amount_paise: selectedPlan.price_paise,
+        status: 'active',
+        utr: manualNote.trim() || `ADMIN_GRANTED_${Date.now()}`,
+        payment_method: 'Super Admin Manual Grant',
+        activated_at: now.toISOString(),
+        expires_at: periodEnd.toISOString(),
+      },
+      _pending_payment: null,
+    };
+
+    try {
+      const res = await fetch(`${supabaseUrl}/rest/v1/businesses?id=eq.${manualBizId}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
+          status: 'active',
+          opening_hours: updatedHours,
+        }),
+      });
+
+      if (res.ok) {
+        setShowManualModal(false);
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        setActionSuccess(
+          `Success! "${targetBiz?.name}" manually activated on ${selectedPlan.name} Plan for ${days} days.`
+        );
+        setManualNote('');
+        await fetchRealData();
+      } else {
+        setActionError('Failed to grant plan access on Supabase server.');
+      }
+    } catch (err: any) {
+      setActionError(err.message || 'Network error.');
+    } finally {
+      setManualSubmitting(false);
+      setTimeout(() => setActionSuccess(null), 5000);
+    }
+  };
+
+  const filteredCaptured = capturedPayments.filter(
     (p) =>
+      p.businessName.toLowerCase().includes(search.toLowerCase()) ||
       p.customerName.toLowerCase().includes(search.toLowerCase()) ||
       p.customerEmail.toLowerCase().includes(search.toLowerCase()) ||
-      p.razorpayPaymentId.toLowerCase().includes(search.toLowerCase()) ||
+      p.utr.toLowerCase().includes(search.toLowerCase()) ||
       p.customerPhone.toLowerCase().includes(search.toLowerCase())
   );
 
-  const totalCapturedRevenue = payments
-    .filter((p) => p.status === 'captured')
-    .reduce((sum, p) => sum + p.amountPaise, 0);
+  const totalCapturedRupees = capturedPayments.reduce((sum, p) => sum + p.amountPaise / 100, 0);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 max-w-7xl mx-auto text-white">
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-extrabold text-white tracking-tight">
-              Razorpay UPI AutoPay Transactions
+              UPI Manual Payments & Subscriptions
             </h1>
             <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
               <Activity className="w-3 h-3 animate-pulse" />
-              Live Gateway Feed
+              Live Control
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Real-time server-side verified recurring mandates, captured payments, and settlements.
+            Verify customer UTR reference numbers, approve plans with 1-click, or manually grant access to any business.
           </p>
         </div>
 
-        <button
-          onClick={fetchRealPayments}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all shadow-sm"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          <span>Refresh</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowManualModal(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-bold transition-all shadow-lg shadow-amber-500/20"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Activate Any Business Manually</span>
+          </button>
+
+          <button
+            onClick={fetchRealData}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all shadow-sm"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
-      {/* Revenue Summary Cards */}
+      {actionSuccess && (
+        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs sm:text-sm flex items-center justify-between gap-2 shadow-sm">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span>{actionSuccess}</span>
+          </div>
+          <button onClick={() => setActionSuccess(null)} className="text-emerald-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {actionError && (
+        <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs sm:text-sm flex items-center justify-between gap-2 shadow-sm">
+          <div className="flex items-center gap-2">
+            <XCircle className="w-5 h-5 text-red-400 shrink-0" />
+            <span>{actionError}</span>
+          </div>
+          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Metrics Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-1">
           <span className="text-[10px] font-bold uppercase text-slate-400">Total Captured Revenue</span>
           <p className="text-3xl font-black text-emerald-400">
-            ₹{(totalCapturedRevenue / 100).toLocaleString('en-IN')}
+            ₹{totalCapturedRupees.toLocaleString('en-IN')}
           </p>
-          <p className="text-[11px] text-slate-500">Live payments across platform</p>
+          <p className="text-[11px] text-slate-500">Live verified customer payments</p>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-1">
-          <span className="text-[10px] font-bold uppercase text-slate-400">Active Paid Mandates</span>
-          <p className="text-3xl font-black text-white">{payments.length}</p>
-          <p className="text-[11px] text-slate-500">AutoPay recurring subscriptions</p>
+          <span className="text-[10px] font-bold uppercase text-slate-400">Pending UTR Approvals</span>
+          <div className="flex items-baseline gap-2">
+            <p className="text-3xl font-black text-amber-400">{pendingPayments.length}</p>
+            {pendingPayments.length > 0 && (
+              <span className="text-xs font-bold text-amber-300 animate-pulse">Action Required</span>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-500">Awaiting Super Admin bank check</p>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-1">
-          <span className="text-[10px] font-bold uppercase text-slate-400">Trial Period Active</span>
-          <p className="text-3xl font-black text-amber-400">Active</p>
-          <p className="text-[11px] text-slate-500">New businesses enjoy 24h free trial</p>
+          <span className="text-[10px] font-bold uppercase text-slate-400">Active Paid Businesses</span>
+          <p className="text-3xl font-black text-white">{capturedPayments.length}</p>
+          <p className="text-[11px] text-slate-500">Businesses with running subscriptions</p>
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center justify-between gap-4">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search customer, payment ID, or email..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
+      {/* SECTION 1: Pending Manual UPI Payment Requests */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl space-y-4 p-6">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center font-bold">
+              <Clock className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-white">
+                Pending Manual UPI Payment Requests
+              </h2>
+              <p className="text-xs text-slate-400">
+                Customers who paid via UPI and submitted their 12-digit UTR number for approval.
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold">
+            {pendingPayments.length} Pending
+          </span>
         </div>
+
+        {pendingPayments.length === 0 ? (
+          <div className="py-12 text-center text-slate-500 space-y-2 border border-dashed border-slate-800 rounded-2xl">
+            <ShieldCheck className="w-8 h-8 mx-auto text-emerald-500" />
+            <p className="text-xs font-bold text-slate-300">No Pending Approvals</p>
+            <p className="text-[11px] text-slate-500">
+              All submitted payments have been verified and processed.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-300">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/60">
+                  <th className="py-3 px-4">Business & Owner</th>
+                  <th className="py-3 px-4">Selected Plan</th>
+                  <th className="py-3 px-4">Amount</th>
+                  <th className="py-3 px-4">Customer UTR</th>
+                  <th className="py-3 px-4">Submitted At</th>
+                  <th className="py-3 px-4 text-right">Verification Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {pendingPayments.map((item) => (
+                  <tr key={item.businessId} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="py-4 px-4">
+                      <p className="font-bold text-white text-sm">{item.businessName}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {item.ownerName} • {item.ownerPhone}
+                      </p>
+                      <p className="text-[10px] text-slate-500 font-mono">/b/{item.businessSlug}</p>
+                    </td>
+
+                    <td className="py-4 px-4 font-bold text-amber-400">
+                      {item.planName} Plan
+                    </td>
+
+                    <td className="py-4 px-4 font-black text-white text-sm">
+                      ₹{(item.amountPaise / 100).toFixed(0)}
+                    </td>
+
+                    <td className="py-4 px-4">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-700 font-mono font-bold text-amber-300 text-xs">
+                        <span>{item.utr}</span>
+                        <button
+                          onClick={() => handleCopyUtr(item.utr)}
+                          title="Copy UTR"
+                          className="text-slate-400 hover:text-white"
+                        >
+                          {copiedUtr === item.utr ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    </td>
+
+                    <td className="py-4 px-4 text-[11px] text-slate-400 font-mono">
+                      {item.submittedAt ? new Date(item.submittedAt).toLocaleString() : 'N/A'}
+                    </td>
+
+                    <td className="py-4 px-4 text-right">
+                      <div className="inline-flex items-center gap-2 justify-end">
+                        {/* WhatsApp Customer Link */}
+                        {item.ownerPhone && item.ownerPhone !== 'N/A' && (
+                          <a
+                            href={`https://wa.me/${item.ownerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                              `Hello ${item.ownerName}, Badal Sarkar here from SmartQR. Confirming receipt for your payment of ₹${(
+                                item.amountPaise / 100
+                              ).toFixed(0)} with UTR: ${item.utr}.`
+                            )}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 transition-colors"
+                            title="Chat on WhatsApp"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                          </a>
+                        )}
+
+                        {/* Approve Button */}
+                        <button
+                          onClick={() => handleApprovePayment(item)}
+                          disabled={processingId === item.businessId}
+                          className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs transition-colors flex items-center gap-1 shadow-md shadow-emerald-500/20"
+                        >
+                          {processingId === item.businessId ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                          <span>Approve & Activate</span>
+                        </button>
+
+                        {/* Reject Button */}
+                        <button
+                          onClick={() => handleRejectPayment(item)}
+                          disabled={processingId === item.businessId}
+                          className="p-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-400 border border-red-500/30 transition-colors"
+                          title="Reject Payment"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+      {/* SECTION 2: Verified & Captured Subscriptions History */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl space-y-4 p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          <div>
+            <h2 className="text-base font-bold text-white">
+              Verified Payments & Active Subscriptions
+            </h2>
+            <p className="text-xs text-slate-400">
+              All successfully verified manual payments and active customer accounts.
+            </p>
+          </div>
+
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search business, owner, or UTR..."
+              className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-300">
             <thead>
-              <tr className="border-b border-slate-800 text-slate-500 font-semibold uppercase text-[10px] bg-slate-950/50">
-                <th className="py-3 px-5">Customer & Contact</th>
-                <th className="py-3 px-5">Amount</th>
-                <th className="py-3 px-5">Payment Status</th>
-                <th className="py-3 px-5">AutoPay Mandate</th>
-                <th className="py-3 px-5">Gateway Reference</th>
-                <th className="py-3 px-5 text-right">Timestamp</th>
+              <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/60">
+                <th className="py-3 px-4">Business & Customer</th>
+                <th className="py-3 px-4">Plan Name</th>
+                <th className="py-3 px-4">Amount</th>
+                <th className="py-3 px-4">Payment Method</th>
+                <th className="py-3 px-4">Reference / UTR</th>
+                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4 text-right">Timestamp</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
-                    <RefreshCw className="w-6 h-6 animate-spin mx-auto text-emerald-500 mb-2" />
-                    <span>Loading real payment records...</span>
+                  <td colSpan={7} className="py-12 text-center text-slate-500">
+                    <RefreshCw className="w-6 h-6 animate-spin mx-auto text-amber-500 mb-2" />
+                    <span>Loading real records...</span>
                   </td>
                 </tr>
-              ) : payments.length === 0 ? (
+              ) : capturedPayments.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-16 text-center text-slate-400 space-y-3">
-                    <Clock className="w-10 h-10 mx-auto text-slate-600" />
-                    <div>
-                      <p className="font-bold text-slate-200 text-sm">No Paid Transactions Yet</p>
-                      <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-                        All registered businesses are currently running under the 24-hour free trial period. When an owner authorizes an AutoPay subscription via Razorpay, real payment receipts will appear here automatically.
-                      </p>
-                    </div>
+                  <td colSpan={7} className="py-12 text-center text-slate-500 space-y-2">
+                    <Clock className="w-8 h-8 mx-auto text-slate-600" />
+                    <p className="font-bold text-slate-300">No Verified Payments Yet</p>
+                    <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                      When customers submit a manual payment or you activate a business, verified records will appear here.
+                    </p>
                   </td>
                 </tr>
               ) : (
-                filtered.map((pay) => (
-                  <tr key={pay.id} className="hover:bg-slate-800/50 transition-colors">
-                    <td className="py-4 px-5">
-                      <p className="font-bold text-white text-sm">{pay.customerName}</p>
-                      <p className="text-[11px] text-slate-400">{pay.customerEmail}</p>
+                filteredCaptured.map((pay) => (
+                  <tr key={pay.id} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="py-4 px-4">
+                      <p className="font-bold text-white text-sm">{pay.businessName}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {pay.customerName} • {pay.customerPhone}
+                      </p>
                     </td>
 
-                    <td className="py-4 px-5 font-black text-emerald-400 text-sm">
-                      ₹{(pay.amountPaise / 100).toFixed(2)}
+                    <td className="py-4 px-4 font-bold text-slate-200">
+                      {pay.planName}
                     </td>
 
-                    <td className="py-4 px-5">
+                    <td className="py-4 px-4 font-black text-emerald-400 text-sm">
+                      ₹{(pay.amountPaise / 100).toFixed(0)}
+                    </td>
+
+                    <td className="py-4 px-4 text-[11px] text-slate-300">
+                      {pay.method}
+                    </td>
+
+                    <td className="py-4 px-4 font-mono text-[11px] text-amber-300">
+                      {pay.utr}
+                    </td>
+
+                    <td className="py-4 px-4">
                       <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold flex items-center gap-1 w-fit">
                         <ShieldCheck className="w-3 h-3 text-emerald-400" />
                         Captured
                       </span>
                     </td>
 
-                    <td className="py-4 px-5">
-                      <span className="px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold">
-                        UPI AutoPay Active
-                      </span>
-                    </td>
-
-                    <td className="py-4 px-5 font-mono text-[11px] text-slate-400">
-                      {pay.razorpayPaymentId}
-                    </td>
-
-                    <td className="py-4 px-5 text-right font-mono text-[11px] text-slate-500">
+                    <td className="py-4 px-4 text-right font-mono text-[11px] text-slate-500">
                       {pay.date}
                     </td>
                   </tr>
@@ -241,6 +702,123 @@ export const AdminPayments: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* MODAL: Direct Manual Business Activation */}
+      {showManualModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl p-6 sm:p-8 space-y-5 text-white relative">
+            <button
+              onClick={() => setShowManualModal(false)}
+              className="absolute top-5 right-5 p-1 rounded-full text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-full border border-amber-400/20">
+                Super Admin Direct Access
+              </span>
+              <h3 className="text-xl font-black text-white">
+                Manually Activate Business Plan
+              </h3>
+              <p className="text-xs text-slate-400">
+                Grant instant plan access to any registered business without payment gateway.
+              </p>
+            </div>
+
+            <form onSubmit={handleManualActivationSubmit} className="space-y-4 pt-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Select Business *
+                </label>
+                <select
+                  required
+                  value={manualBizId}
+                  onChange={(e) => setManualBizId(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-amber-500"
+                >
+                  {allBusinesses.length === 0 ? (
+                    <option value="">No businesses registered yet</option>
+                  ) : (
+                    allBusinesses.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} ({b.ownerName} - {b.status})
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Select Plan *
+                  </label>
+                  <select
+                    value={manualPlanId}
+                    onChange={(e) => setManualPlanId(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-amber-500"
+                  >
+                    {DEFAULT_PLANS.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} (₹{(p.price_paise / 100).toFixed(0)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Duration *
+                  </label>
+                  <select
+                    value={manualDurationDays}
+                    onChange={(e) => setManualDurationDays(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="30">1 Month (30 Days)</option>
+                    <option value="90">3 Months (90 Days)</option>
+                    <option value="180">6 Months (180 Days)</option>
+                    <option value="365">1 Year (365 Days)</option>
+                    <option value="3650">Lifetime (10 Years)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Reference Note / UTR (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={manualNote}
+                  onChange={(e) => setManualNote(e.target.value)}
+                  placeholder="e.g. Paid in Cash / Direct PhonePe UTR / VIP Client"
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-amber-500 placeholder-slate-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={manualSubmitting || !manualBizId}
+                className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
+              >
+                {manualSubmitting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Activating Business...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>Grant Plan Access Now</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

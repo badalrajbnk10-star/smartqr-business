@@ -16,6 +16,7 @@ interface BusinessContextType {
   activePlan: Plan | null;
   subscription: Subscription | null;
   upgradeSubscription: (planId: string, paymentResponse: any) => Promise<boolean>;
+  submitManualPayment: (planId: string, utr: string, note?: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const BusinessContext = createContext<BusinessContextType | undefined>(undefined);
@@ -195,6 +196,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             // Check if an actual paid subscription exists in database or opening_hours._subscription
             const dbSub = Array.isArray(b.subscription) ? b.subscription[0] : b.subscription;
             const customPaidSub = (b.opening_hours as any)?._subscription;
+            const pendingSub = (b.opening_hours as any)?._pending_payment;
             const activePaidSub = (dbSub && dbSub.status === 'active') ? dbSub : (customPaidSub && customPaidSub.status === 'active' ? customPaidSub : null);
 
             const bizCreated = new Date(b.created_at || Date.now()).getTime();
@@ -208,6 +210,24 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 ...activePaidSub,
                 plan: matchedPlan,
                 status: 'active',
+              };
+            } else if (pendingSub && pendingSub.status === 'pending') {
+              const matchedPlan = DEFAULT_PLANS.find(p => p.id === pendingSub.plan_id || p.slug === pendingSub.plan_slug) || DEFAULT_PLANS[0];
+              sub = {
+                id: `sub-pending-${b.id}`,
+                business_owner_id: user.id,
+                business_id: b.id,
+                plan_id: matchedPlan.id,
+                status: 'pending',
+                trial_started_at: new Date(bizCreated).toISOString(),
+                trial_expires_at: trialExpires,
+                current_period_start: new Date(bizCreated).toISOString(),
+                current_period_end: trialExpires,
+                autopay_mandate_status: 'pending',
+                cancel_at_period_end: false,
+                created_at: pendingSub.submitted_at || new Date(bizCreated).toISOString(),
+                updated_at: new Date().toISOString(),
+                plan: matchedPlan,
               };
             } else {
               sub = {
@@ -552,6 +572,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               activated_at: now.toISOString(),
               expires_at: periodEnd.toISOString(),
             },
+            _pending_payment: null,
           },
         });
       }
@@ -563,9 +584,93 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const submitManualPayment = async (planId: string, utr: string, note?: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      if (!currentBusiness) {
+        return { success: false, error: 'No active business profile found.' };
+      }
+
+      const cleanUtr = utr.trim();
+      if (!cleanUtr || cleanUtr.length < 6) {
+        return { success: false, error: 'Please enter a valid 12-digit UPI Transaction / UTR Number.' };
+      }
+
+      const selectedPlan = DEFAULT_PLANS.find((p) => p.id === planId || p.slug === planId) || DEFAULT_PLANS[0];
+      const now = new Date().toISOString();
+
+      const pendingPayload = {
+        plan_id: selectedPlan.id,
+        plan_slug: selectedPlan.slug,
+        plan_name: selectedPlan.name,
+        amount_paise: selectedPlan.price_paise,
+        utr: cleanUtr,
+        note: note || '',
+        customer_name: user?.full_name || currentBusiness.name,
+        customer_phone: user?.phone || currentBusiness.phone || '',
+        customer_email: user?.email || currentBusiness.email || '',
+        submitted_at: now,
+        status: 'pending',
+      };
+
+      const currentHours = ((currentBusiness.opening_hours || {}) as any);
+      const updatedHours = {
+        ...currentHours,
+        _pending_payment: pendingPayload,
+      };
+
+      // Direct REST PATCH to Supabase Cloud
+      const res = await fetch(`${supabaseUrl}/rest/v1/businesses?id=eq.${currentBusiness.id}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        },
+        body: JSON.stringify({
+          opening_hours: updatedHours,
+        }),
+      });
+
+      if (!res.ok) {
+        await supabase.from('businesses').update({ opening_hours: updatedHours }).eq('id', currentBusiness.id);
+      }
+
+      const updatedBusiness = {
+        ...currentBusiness,
+        opening_hours: updatedHours,
+      };
+      setCurrentBusiness(updatedBusiness);
+      localStorage.setItem(ACTIVE_BIZ_KEY, JSON.stringify(updatedBusiness));
+
+      const pendingSub: Subscription = {
+        id: `sub-pending-${currentBusiness.id}`,
+        business_owner_id: user?.id || 'owner-1',
+        business_id: currentBusiness.id,
+        plan_id: selectedPlan.id,
+        status: 'pending',
+        trial_started_at: subscription?.trial_started_at || now,
+        trial_expires_at: subscription?.trial_expires_at || now,
+        autopay_mandate_status: 'pending',
+        cancel_at_period_end: false,
+        created_at: now,
+        updated_at: now,
+        plan: selectedPlan,
+      };
+      setSubscription(pendingSub);
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Failed to submit manual payment:', err);
+      return { success: false, error: err.message || 'Failed to submit payment details.' };
+    }
+  };
+
   // Determine active plan to display
   const activePlanToDisplay: Plan | null =
     subscription?.status === 'active'
+      ? (subscription.plan || DEFAULT_PLANS[0])
+      : subscription?.status === 'pending'
       ? (subscription.plan || DEFAULT_PLANS[0])
       : (subscription?.status === 'trialing' ? TRIAL_PLAN : null);
 
@@ -584,6 +689,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         activePlan: activePlanToDisplay,
         subscription,
         upgradeSubscription,
+        submitManualPayment,
       }}
     >
       {children}

@@ -7,9 +7,13 @@ import {
   Lock,
   Unlock,
   RefreshCw,
-  Activity
+  Activity,
+  CreditCard,
+  Sparkles,
+  X,
+  Check
 } from 'lucide-react';
-import { supabaseUrl, supabaseAnonKey } from '../../lib/supabase';
+import { supabaseUrl, supabaseAnonKey, DEFAULT_PLANS } from '../../lib/supabase';
 
 interface RealAdminBusiness {
   id: string;
@@ -25,6 +29,7 @@ interface RealAdminBusiness {
   registeredDate: string;
   servicesCount: number;
   menuCount: number;
+  rawOpeningHours?: any;
 }
 
 export const AdminBusinesses: React.FC = () => {
@@ -34,6 +39,10 @@ export const AdminBusinesses: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [planModalBiz, setPlanModalBiz] = useState<RealAdminBusiness | null>(null);
+  const [selectedPlanId, setSelectedPlanId] = useState(DEFAULT_PLANS[1]?.id || DEFAULT_PLANS[0]?.id);
+  const [planDurationDays, setPlanDurationDays] = useState('30');
+  const [planUpdating, setPlanUpdating] = useState(false);
 
   const fetchRealBusinesses = async () => {
     setLoading(true);
@@ -78,6 +87,7 @@ export const AdminBusinesses: React.FC = () => {
           registeredDate: regDate,
           servicesCount: svcs,
           menuCount: menu,
+          rawOpeningHours: b.opening_hours || {},
         };
       });
 
@@ -92,6 +102,64 @@ export const AdminBusinesses: React.FC = () => {
   useEffect(() => {
     fetchRealBusinesses();
   }, []);
+
+  const handleGrantPlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!planModalBiz) return;
+    setPlanUpdating(true);
+
+    const selectedPlan = DEFAULT_PLANS.find((p) => p.id === selectedPlanId) || DEFAULT_PLANS[0];
+    const now = new Date();
+    const days = parseInt(planDurationDays) || 30;
+    const periodEnd = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+
+    const currentHours = planModalBiz.rawOpeningHours || {};
+    const updatedHours = {
+      ...currentHours,
+      _subscription: {
+        plan_id: selectedPlan.id,
+        plan_name: selectedPlan.name,
+        amount_paise: selectedPlan.price_paise,
+        status: 'active',
+        utr: `ADMIN_MANUAL_${Date.now()}`,
+        payment_method: 'Super Admin Manual Activation',
+        activated_at: now.toISOString(),
+        expires_at: periodEnd.toISOString(),
+      },
+      _pending_payment: null,
+    };
+
+    try {
+      const res = await fetch(`${supabaseUrl}/rest/v1/businesses?id=eq.${planModalBiz.id}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
+          status: 'active',
+          opening_hours: updatedHours,
+        }),
+      });
+
+      if (res.ok) {
+        setBusinesses((prev) =>
+          prev.map((b) => (b.id === planModalBiz.id ? { ...b, status: 'active', rawOpeningHours: updatedHours } : b))
+        );
+        setActionMessage(`Business "${planModalBiz.name}" activated on ${selectedPlan.name} Plan for ${days} days.`);
+        setPlanModalBiz(null);
+      } else {
+        setActionMessage('Failed to update plan on server.');
+      }
+    } catch {
+      setActionMessage('Network error updating plan.');
+    } finally {
+      setPlanUpdating(false);
+      setTimeout(() => setActionMessage(null), 4000);
+    }
+  };
 
   const toggleSuspension = async (biz: RealAdminBusiness) => {
     setUpdatingId(biz.id);
@@ -298,6 +366,14 @@ export const AdminBusinesses: React.FC = () => {
                       </a>
 
                       <button
+                        onClick={() => setPlanModalBiz(biz)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-[11px] font-semibold transition-colors"
+                      >
+                        <CreditCard className="w-3.5 h-3.5" />
+                        <span>Set Plan</span>
+                      </button>
+
+                      <button
                         onClick={() => toggleSuspension(biz)}
                         disabled={updatingId === biz.id}
                         className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
@@ -326,6 +402,99 @@ export const AdminBusinesses: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Plan Assignment Modal */}
+      {planModalBiz && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl p-6 sm:p-8 space-y-5 text-white relative">
+            <button
+              onClick={() => setPlanModalBiz(null)}
+              className="absolute top-5 right-5 p-1 rounded-full text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div>
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-full border border-amber-400/20">
+                Grant Access
+              </span>
+              <h3 className="text-xl font-black text-white mt-1">
+                Assign Plan to {planModalBiz.name}
+              </h3>
+              <p className="text-xs text-slate-400">
+                Owner: {planModalBiz.ownerName} ({planModalBiz.ownerEmail})
+              </p>
+            </div>
+
+            <form onSubmit={handleGrantPlan} className="space-y-4 pt-2">
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-slate-300">
+                  Select Subscription Plan *
+                </label>
+                <div className="space-y-2">
+                  {DEFAULT_PLANS.map((p) => {
+                    const isSelected = selectedPlanId === p.id;
+                    return (
+                      <div
+                        key={p.id}
+                        onClick={() => setSelectedPlanId(p.id)}
+                        className={`p-3 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
+                          isSelected
+                            ? 'bg-amber-500/10 border-amber-500 text-white'
+                            : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        <div>
+                          <p className="font-bold text-xs">{p.name} Plan</p>
+                          <p className="text-[10px] text-slate-400">Up to {p.max_photos_per_business} photos</p>
+                        </div>
+                        <span className="font-black text-xs text-amber-400">
+                          ₹{(p.price_paise / 100).toFixed(0)}/mo
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Plan Duration *
+                </label>
+                <select
+                  value={planDurationDays}
+                  onChange={(e) => setPlanDurationDays(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="30">1 Month (30 Days)</option>
+                  <option value="90">3 Months (90 Days)</option>
+                  <option value="180">6 Months (180 Days)</option>
+                  <option value="365">1 Year (365 Days)</option>
+                  <option value="3650">Lifetime Access (10 Years)</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                disabled={planUpdating}
+                className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
+              >
+                {planUpdating ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Updating Plan on Supabase...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Activate Plan Immediately</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

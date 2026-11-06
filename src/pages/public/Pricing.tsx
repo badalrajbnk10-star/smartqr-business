@@ -15,7 +15,7 @@ export const Pricing: React.FC = () => {
           Simple Plans Tailored for Your Growth
         </h1>
         <p className="text-slate-600 text-base sm:text-lg">
-          Start with a full <strong>24-hour free trial</strong>. Then continue seamlessly with official Razorpay UPI AutoPay. Cancel anytime with 1 tap.
+          Start with a full <strong>24-hour free trial</strong>. Then continue easily with direct UPI QR payments (GPay, PhonePe, Paytm, BHIM) and instant WhatsApp activation.
         </p>
       </div>
 
@@ -86,7 +86,7 @@ export const Pricing: React.FC = () => {
                   <ArrowRight className="w-4 h-4" />
                 </Link>
                 <p className={`text-[11px] text-center mt-2.5 ${isPopular ? 'text-slate-400' : 'text-slate-400'}`}>
-                  No charge today. Recurring UPI mandate authorized.
+                  No advance payment today. 24 hours full access.
                 </p>
               </div>
             </div>
@@ -102,10 +102,10 @@ export const Pricing: React.FC = () => {
           </div>
           <div>
             <h3 className="font-bold text-slate-900 text-base sm:text-lg">
-              Official Razorpay UPI AutoPay Mandate
+              Direct & Secure UPI Payments
             </h3>
             <p className="text-xs sm:text-sm text-slate-600 max-w-xl">
-              Pay smoothly with Google Pay, PhonePe, Paytm, or BHIM. You have 100% control over your mandate and can pause or cancel anytime.
+              Pay smoothly with Google Pay, PhonePe, Paytm, or BHIM. Fast 12-digit UTR verification and direct WhatsApp support (+91 9931782577).
             </p>
           </div>
         </div>
