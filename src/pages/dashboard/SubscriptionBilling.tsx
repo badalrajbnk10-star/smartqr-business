@@ -47,6 +47,15 @@ export const SubscriptionBilling: React.FC = () => {
 
   useEffect(() => {
     fetchPlatformSettings().then((s) => setPlatformSettings(s));
+
+    const handler = (e: any) => {
+      const s = e.detail;
+      if (s) {
+        setPlatformSettings(s);
+      }
+    };
+    window.addEventListener('smartqr_settings_updated', handler);
+    return () => window.removeEventListener('smartqr_settings_updated', handler);
   }, []);
 
   const pendingPayment = (currentBusiness?.opening_hours as any)?._pending_payment;
@@ -58,7 +67,7 @@ export const SubscriptionBilling: React.FC = () => {
     trialRemainingTime.isExpired || currentBusiness?.status === 'expired' || subscription?.status === 'expired';
   const isTrial = !isPaidActive && !isPending && !isExpired && subscription?.status === 'trialing';
 
-  const officialUpiId = platformSettings.upi_id || '9931782577@ybl';
+  const officialUpiId = platformSettings.upi_id || '9931782577@fam';
   const officialPayeeName = platformSettings.payee_name || 'Badal Sarkar';
   const supportPhone = platformSettings.support_phone || '+91 9931782577';
 

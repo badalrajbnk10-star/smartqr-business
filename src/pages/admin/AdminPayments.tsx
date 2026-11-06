@@ -229,6 +229,18 @@ export const AdminPayments: React.FC = () => {
 
   useEffect(() => {
     fetchRealData();
+
+    const handler = (e: any) => {
+      const s = e.detail;
+      if (s) {
+        setSettings((prev) => ({
+          ...prev,
+          ...s,
+        }));
+      }
+    };
+    window.addEventListener('smartqr_settings_updated', handler);
+    return () => window.removeEventListener('smartqr_settings_updated', handler);
   }, []);
 
   const handleCopyUtr = (utr: string) => {
@@ -242,6 +254,8 @@ export const AdminPayments: React.FC = () => {
     e.preventDefault();
     if (!newUpiId.trim()) return;
     setSavingUpi(true);
+    setActionError(null);
+    setActionSuccess(null);
 
     const res = await savePlatformSettings({
       upi_id: newUpiId.trim(),
@@ -259,6 +273,8 @@ export const AdminPayments: React.FC = () => {
       setShowEditUpiModal(false);
       setActionSuccess(`UPI ID updated to "${newUpiId.trim()}". All customer QR codes will use this UPI ID.`);
       setTimeout(() => setActionSuccess(null), 4000);
+    } else {
+      setActionError(res.error || 'Failed to update UPI ID.');
     }
   };
 

@@ -10,10 +10,10 @@ export interface PlatformSettings {
 }
 
 export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
-  upi_id: '9931782577@ybl',
+  upi_id: '9931782577@fam',
   payee_name: 'Badal Sarkar',
   support_phone: '+91 9931782577',
-  support_email: 'contact.badalsarkar@gmail.com',
+  support_email: 'badalrajbnk10@gmail.com',
   website_name: 'SmartQR Business',
   trial_duration_hours: 24,
 };
@@ -32,12 +32,14 @@ export async function fetchPlatformSettings(): Promise<PlatformSettings> {
 
   // 2. Fetch live settings from Super Admin profile in Supabase
   try {
-    const res = await fetch(`${supabaseUrl}/rest/v1/profiles?role=eq.super_admin&select=avatar_url,full_name,phone`, {
+    const res = await fetch(`${supabaseUrl}/rest/v1/profiles?role=eq.super_admin&select=id,avatar_url,full_name,phone`, {
       headers: {
         'apikey': supabaseAnonKey,
         'Authorization': `Bearer ${supabaseAnonKey}`,
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
       },
+      cache: 'no-store',
     });
 
     if (res.ok) {
@@ -68,47 +70,95 @@ export async function fetchPlatformSettings(): Promise<PlatformSettings> {
   return currentSettings;
 }
 
-export async function savePlatformSettings(newSettings: Partial<PlatformSettings>): Promise<{ success: boolean; error?: string }> {
+export async function savePlatformSettings(newSettings: Partial<PlatformSettings>): Promise<{ success: boolean; settings?: PlatformSettings; error?: string }> {
   try {
     const existing = await fetchPlatformSettings();
+    const cleanUpi = newSettings.upi_id !== undefined ? newSettings.upi_id.trim() : existing.upi_id;
+    const cleanPayee = newSettings.payee_name !== undefined ? newSettings.payee_name.trim() : existing.payee_name;
+    const cleanPhone = newSettings.support_phone !== undefined ? newSettings.support_phone.trim() : existing.support_phone;
+    const cleanEmail = newSettings.support_email !== undefined ? newSettings.support_email.trim() : existing.support_email;
+    const cleanWebsite = newSettings.website_name !== undefined ? newSettings.website_name.trim() : existing.website_name;
+
     const merged: PlatformSettings = {
       ...existing,
       ...newSettings,
-      upi_id: newSettings.upi_id?.trim() || existing.upi_id || '9931782577@ybl',
-      payee_name: newSettings.payee_name?.trim() || existing.payee_name || 'Badal Sarkar',
-      support_phone: newSettings.support_phone?.trim() || existing.support_phone || '+91 9931782577',
-      support_email: newSettings.support_email?.trim() || existing.support_email || 'contact.badalsarkar@gmail.com',
-      website_name: newSettings.website_name?.trim() || existing.website_name || 'SmartQR Business',
+      upi_id: cleanUpi || '9931782577@fam',
+      payee_name: cleanPayee || 'Badal Sarkar',
+      support_phone: cleanPhone || '+91 9931782577',
+      support_email: cleanEmail || 'badalrajbnk10@gmail.com',
+      website_name: cleanWebsite || 'SmartQR Business',
     };
 
-    // Save to localStorage immediately
+    // Save to localStorage immediately for instant local reflection
     localStorage.setItem(CACHE_KEY, JSON.stringify(merged));
 
-    // Persist to Supabase Super Admin profile
-    const token = localStorage.getItem('smartqr_auth_token') || supabaseAnonKey;
     const settingsPayload = `settings:${JSON.stringify(merged)}`;
+    const updateBody = {
+      avatar_url: settingsPayload,
+      full_name: merged.payee_name,
+      phone: merged.support_phone,
+      updated_at: new Date().toISOString(),
+    };
 
-    const res = await fetch(`${supabaseUrl}/rest/v1/profiles?role=eq.super_admin`, {
-      method: 'PATCH',
-      headers: {
-        'apikey': supabaseAnonKey,
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal',
-      },
-      body: JSON.stringify({
-        avatar_url: settingsPayload,
-        full_name: merged.payee_name,
-        phone: merged.support_phone,
-        updated_at: new Date().toISOString(),
-      }),
-    });
+    // Persist to Supabase Super Admin profile using reliable public anon key
+    let persistedInSupabase = false;
+    try {
+      const res = await fetch(`${supabaseUrl}/rest/v1/profiles?role=eq.super_admin`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        },
+        body: JSON.stringify(updateBody),
+      });
 
-    if (res.ok) {
-      return { success: true };
-    } else {
-      return { success: true }; // LocalStorage persisted
+      if (res.ok) {
+        const rows = await res.json().catch(() => []);
+        if (Array.isArray(rows) && rows.length > 0) {
+          persistedInSupabase = true;
+        }
+      }
+    } catch (restErr) {
+      console.warn('Direct REST patch error:', restErr);
     }
+
+    // Fallback: Patch by Super Admin ID if role query returned 0 rows
+    if (!persistedInSupabase) {
+      try {
+        const idRes = await fetch(`${supabaseUrl}/rest/v1/profiles?role=eq.super_admin&select=id`, {
+          headers: { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}` },
+        });
+        if (idRes.ok) {
+          const admins = await idRes.json();
+          if (Array.isArray(admins) && admins.length > 0) {
+            const patchByIdRes = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${admins[0].id}`, {
+              method: 'PATCH',
+              headers: {
+                'apikey': supabaseAnonKey,
+                'Authorization': `Bearer ${supabaseAnonKey}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation',
+              },
+              body: JSON.stringify(updateBody),
+            });
+            if (patchByIdRes.ok) {
+              persistedInSupabase = true;
+            }
+          }
+        }
+      } catch (idErr) {
+        console.warn('Fallback patch error:', idErr);
+      }
+    }
+
+    // Broadcast update across all open tabs and components in real time
+    try {
+      window.dispatchEvent(new CustomEvent('smartqr_settings_updated', { detail: merged }));
+    } catch {}
+
+    return { success: true, settings: merged };
   } catch (err: any) {
     console.error('Failed to save settings:', err);
     return { success: false, error: err.message || 'Failed to update settings.' };

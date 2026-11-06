@@ -14,6 +14,7 @@ export const AdminSettings: React.FC = () => {
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copiedUpi, setCopiedUpi] = useState(false);
 
   useEffect(() => {
@@ -25,6 +26,19 @@ export const AdminSettings: React.FC = () => {
       setPayeeName(s.payee_name);
       setTrialHours(s.trial_duration_hours.toString());
     });
+
+    const handler = (e: any) => {
+      const s = e.detail;
+      if (s) {
+        setWebsiteName(s.website_name);
+        setSupportEmail(s.support_email);
+        setSupportPhone(s.support_phone);
+        setUpiId(s.upi_id);
+        setPayeeName(s.payee_name);
+      }
+    };
+    window.addEventListener('smartqr_settings_updated', handler);
+    return () => window.removeEventListener('smartqr_settings_updated', handler);
   }, []);
 
   const handleCopyUpi = () => {
@@ -40,6 +54,8 @@ export const AdminSettings: React.FC = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setErrorMessage(null);
+    setSavedSuccess(false);
 
     const res = await savePlatformSettings({
       website_name: websiteName,
@@ -54,7 +70,13 @@ export const AdminSettings: React.FC = () => {
     if (res.success) {
       confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
       setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 4000);
+      if (res.settings) {
+        setUpiId(res.settings.upi_id);
+        setPayeeName(res.settings.payee_name);
+      }
+      setTimeout(() => setSavedSuccess(false), 5000);
+    } else {
+      setErrorMessage(res.error || 'Failed to update settings.');
     }
   };
 
@@ -73,6 +95,13 @@ export const AdminSettings: React.FC = () => {
         <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs sm:text-sm flex items-center gap-2 shadow-sm">
           <CheckCircle2 className="w-5 h-5 shrink-0" />
           <span>Platform UPI settings updated successfully! All customer QR codes are now generated using this UPI ID.</span>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs sm:text-sm flex items-center gap-2 shadow-sm">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <span>{errorMessage}</span>
         </div>
       )}
 
