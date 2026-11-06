@@ -20,11 +20,17 @@ export const Login: React.FC = () => {
       const cleanId = identifier.trim();
       const cleanPassword = password.trim();
 
-      const res = await login(cleanId, cleanPassword, 'business_owner');
+      const res = await login(cleanId, cleanPassword);
 
       if (res.success) {
         setLoading(false);
-        window.location.replace('/dashboard');
+        const cached = localStorage.getItem('smartqr_active_profile');
+        const role = cached ? JSON.parse(cached)?.role : null;
+        if (role === 'super_admin') {
+          window.location.replace('/super-admin');
+        } else {
+          window.location.replace('/dashboard');
+        }
       } else {
         setLoading(false);
         setError(res.error || 'Failed to sign in. Please verify your email / mobile and password.');
@@ -72,7 +78,7 @@ export const Login: React.FC = () => {
                 spellCheck={false}
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="e.g. badalrajbnk10@gmail.com or 9931782577"
+                placeholder="name@business.com or 10-digit mobile"
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium"
               />
             </div>
