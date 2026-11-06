@@ -183,7 +183,7 @@ export const DashboardOverview: React.FC = () => {
             <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
           </div>
           <p className="text-2xl font-extrabold text-slate-900">
-            {currentBusiness?.google_review_url ? 'Active' : 'Not Set'}
+            {(currentBusiness?.opening_hours as any)?._analytics?.review_clicks ?? 0}
           </p>
           <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
             {currentBusiness?.google_review_url ? 'Direct review redirect' : 'Add review link in Profile'}
@@ -196,7 +196,7 @@ export const DashboardOverview: React.FC = () => {
             <Eye className="w-4 h-4 text-emerald-600" />
           </div>
           <p className="text-2xl font-extrabold text-slate-900">
-            {currentBusiness?.whatsapp ? 'Enabled' : 'Not Set'}
+            {(currentBusiness?.opening_hours as any)?._analytics?.whatsapp_clicks ?? 0}
           </p>
           <span className="text-[11px] text-slate-500">Direct 1-tap WhatsApp chat</span>
         </div>

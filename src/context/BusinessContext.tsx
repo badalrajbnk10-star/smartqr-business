@@ -224,8 +224,13 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               sub.status = 'expired';
             }
 
+            const bizPhotos = Array.isArray(b.photos) && b.photos.length > 0
+              ? b.photos
+              : (Array.isArray((b.opening_hours as any)?._photos) ? (b.opening_hours as any)?._photos : []);
+
             normalizedList.push({
               ...b,
+              photos: bizPhotos,
               status: isBizActive || sub.status === 'active' ? 'active' : (isTrialOver ? 'expired' : 'trialing'),
               qr_code: qr,
               subscription: sub,
@@ -447,10 +452,25 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       } else {
         const { qr_code, photos, category, subscription, id: _id, owner_id: _oid, ...bizUpdates } = updates;
 
+        // If photos are provided, persist them inside opening_hours._photos in Postgres
+        if (Array.isArray(photos)) {
+          const currentHours = ((currentBusiness?.opening_hours || {}) as any);
+          bizUpdates.opening_hours = {
+            ...currentHours,
+            ...bizUpdates.opening_hours,
+            _photos: photos,
+          };
+        }
+
         const { error } = await supabase.from('businesses').update(bizUpdates).eq('id', id);
         if (error) return { success: false, error: error.message };
         if (currentBusiness && currentBusiness.id === id) {
-          const merged = { ...currentBusiness, ...bizUpdates, updated_at: new Date().toISOString() };
+          const merged = {
+            ...currentBusiness,
+            ...bizUpdates,
+            photos: Array.isArray(photos) ? photos : currentBusiness.photos,
+            updated_at: new Date().toISOString()
+          };
           setCurrentBusiness(merged);
           localStorage.setItem(ACTIVE_BIZ_KEY, JSON.stringify(merged));
         }

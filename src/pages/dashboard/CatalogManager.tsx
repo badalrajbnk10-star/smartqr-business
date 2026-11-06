@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UtensilsCrossed, Plus, Trash2, CheckCircle2, AlertCircle, Tag, Briefcase } from 'lucide-react';
 import { useBusiness } from '../../context/BusinessContext';
 import { MenuItem, BusinessService } from '../../types/database';
+import { DirectPhotoUpload } from '../../components/common/DirectPhotoUpload';
 
 export const CatalogManager: React.FC = () => {
   const { currentBusiness, updateBusiness } = useBusiness();
@@ -205,13 +206,13 @@ export const CatalogManager: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Image URL (Optional)</label>
-                <input
-                  type="url"
+                <DirectPhotoUpload
+                  label="Dish / Product Photo (Optional)"
                   value={menuImage}
-                  onChange={(e) => setMenuImage(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                  onChange={setMenuImage}
+                  maxDimension={800}
+                  aspectHint="Choose photo from phone gallery or camera"
+                  placeholderText="Tap to Choose Photo from Device"
                 />
               </div>
             </div>

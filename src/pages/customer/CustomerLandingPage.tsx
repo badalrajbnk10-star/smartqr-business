@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Business } from '../../types/database';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../../lib/supabase';
+import { trackScanEvent, trackCustomerAction } from '../../lib/telemetry';
 
 // Showcase fallback demo business for grand-heritage
 const demoBiz: Business = {
@@ -210,8 +211,8 @@ export const CustomerLandingPage: React.FC = () => {
             localStorage.setItem(cacheKey, JSON.stringify(data));
           } catch {}
 
-          // Fire telemetry in background
-          setTimeout(() => logScan(data.id), 50);
+          // Fire real telemetry in background
+          setTimeout(() => trackScanEvent(data.id, data.qr_code?.id), 50);
         } else {
           setLoading(false);
         }
@@ -413,6 +414,7 @@ export const CustomerLandingPage: React.FC = () => {
             {/* Call */}
             <a
               href={`tel:${business.phone}`}
+              onClick={() => trackCustomerAction(business.id, 'call')}
               className="flex flex-col items-center justify-center gap-1 py-2.5 px-1 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-bold transition-all shadow-sm active:scale-95"
             >
               <PhoneCall className="w-4 h-4 text-emerald-400" />
@@ -422,6 +424,7 @@ export const CustomerLandingPage: React.FC = () => {
             {/* WhatsApp */}
             <a
               href={`https://wa.me/${(business.whatsapp || business.phone)?.replace(/[^0-9]/g, '')}?text=Hi%2C%20I%20found%20your%20profile%20via%20SmartQR.`}
+              onClick={() => trackCustomerAction(business.id, 'whatsapp')}
               target="_blank"
               rel="noopener noreferrer"
               className="flex flex-col items-center justify-center gap-1 py-2.5 px-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold transition-all shadow-sm active:scale-95"
@@ -444,6 +447,7 @@ export const CustomerLandingPage: React.FC = () => {
             {/* Google Review Button (Highlighted) */}
             <a
               href={business.google_review_url || business.google_maps_url || '#'}
+              onClick={() => trackCustomerAction(business.id, 'review')}
               target="_blank"
               rel="noopener noreferrer"
               className="flex flex-col items-center justify-center gap-1 py-2.5 px-1 bg-gradient-to-br from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-amber-500/25 active:scale-95"
@@ -539,6 +543,7 @@ export const CustomerLandingPage: React.FC = () => {
                 </p>
                 <a
                   href={business.google_review_url || business.google_maps_url || '#'}
+                  onClick={() => trackCustomerAction(business.id, 'review')}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
@@ -611,34 +616,40 @@ export const CustomerLandingPage: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'photos' && (
-            <div className="space-y-4">
-              {(business.photos || []).length === 0 ? (
-                <div className="py-12 text-center text-slate-400 space-y-2">
-                  <Calendar className="w-8 h-8 mx-auto text-slate-300" />
-                  <p className="text-xs">No gallery photos uploaded yet.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {(business.photos || []).map((photo) => (
-                    <div key={photo.id} className="group relative rounded-2xl overflow-hidden aspect-square bg-slate-100 shadow-xs">
-                      <img
-                        src={photo.photo_url}
-                        alt={photo.caption || 'Business Photo'}
-                        loading="lazy"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                      {photo.caption && (
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                          <p className="text-[10px] text-white font-medium truncate">{photo.caption}</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          {activeTab === 'photos' && (() => {
+            const galleryList = (business.photos && business.photos.length > 0)
+              ? business.photos
+              : ((business.opening_hours as any)?._photos || []);
+
+            return (
+              <div className="space-y-4">
+                {galleryList.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 space-y-2">
+                    <Calendar className="w-8 h-8 mx-auto text-slate-300" />
+                    <p className="text-xs">No gallery photos uploaded yet.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    {galleryList.map((photo: any) => (
+                      <div key={photo.id} className="group relative rounded-2xl overflow-hidden aspect-square bg-slate-100 shadow-xs">
+                        <img
+                          src={photo.photo_url}
+                          alt={photo.caption || 'Business Photo'}
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        {photo.caption && (
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                            <p className="text-[10px] text-white font-medium truncate">{photo.caption}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Footer Branding */}

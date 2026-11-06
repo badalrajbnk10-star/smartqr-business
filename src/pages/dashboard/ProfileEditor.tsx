@@ -16,6 +16,7 @@ import {
   Briefcase
 } from 'lucide-react';
 import { useBusiness } from '../../context/BusinessContext';
+import { DirectPhotoUpload } from '../../components/common/DirectPhotoUpload';
 
 const BUSINESS_CATEGORIES = [
   { id: 'f13ce3c2-83e4-41be-92e3-3e47a913034c', name: 'CSC & Online Services (Cyber Cafe, CSC Center, Aadhaar, Banking Kiosk)' },
@@ -437,36 +438,37 @@ export const ProfileEditor: React.FC = () => {
           </div>
         </div>
 
-        {/* Branding Images */}
+        {/* Direct Photo Branding (Logo & Banner) */}
         <div className="space-y-4 pt-4 border-t border-slate-100">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
-            Logo & Banner Image URLs
-          </h3>
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-700">
+              Direct Photo Upload (Logo & Header Banner)
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Choose direct photos from your phone gallery or camera. No image link required.
+            </p>
+          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Logo URL (Square PNG / JPG)
-              </label>
-              <input
-                type="url"
+              <DirectPhotoUpload
+                label="Business Logo (Square)"
                 value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-                placeholder="https://example.com/logo.png"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                onChange={setLogoUrl}
+                maxDimension={500}
+                aspectHint="Square photo for QR center & profile picture"
+                placeholderText="Upload Logo from Device / Camera"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Header Cover Banner URL (Landscape)
-              </label>
-              <input
-                type="url"
+              <DirectPhotoUpload
+                label="Cover Banner (Landscape)"
                 value={bannerUrl}
-                onChange={(e) => setBannerUrl(e.target.value)}
-                placeholder="https://example.com/banner.jpg"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                onChange={setBannerUrl}
+                maxDimension={1200}
+                aspectHint="Wide cover photo displayed at top of customer landing page"
+                placeholderText="Upload Banner from Device / Camera"
               />
             </div>
           </div>
