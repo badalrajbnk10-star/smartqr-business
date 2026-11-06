@@ -272,6 +272,21 @@ export const ProfileEditor: React.FC = () => {
     }
   };
 
+  const handleAutoGenerateMapsUrl = () => {
+    const fullQuery = [name, address, city, state, pincode].filter(Boolean).join(', ');
+    if (!fullQuery) {
+      alert('Please enter your Business Name and Address first to auto-generate the map link.');
+      return;
+    }
+    const generatedUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullQuery)}`;
+    setGoogleMapsUrl(generatedUrl);
+  };
+
+  const handleSearchOnGoogleMaps = () => {
+    const fullQuery = [name, address, city].filter(Boolean).join(', ');
+    window.open(`https://www.google.com/maps/search/${encodeURIComponent(fullQuery || name || 'business')}`, '_blank');
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -532,41 +547,86 @@ export const ProfileEditor: React.FC = () => {
 
         {/* Google Integrations */}
         <div className="space-y-4 pt-4 border-t border-slate-100">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-            <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-            Google Maps & Google Review Link
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Google Maps Directions URL
-              </label>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                Google Maps & 5-Star Review Setup
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Enable 1-tap customer directions on Google Maps and direct 5-star Google review submissions.
+              </p>
+            </div>
+            <a
+              href="https://business.google.com/create"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-xl border border-brand-200/60 transition-colors shrink-0"
+            >
+              <span>List Shop on Google (Free)</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {/* Google Maps Directions */}
+            <div className="space-y-2 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-red-500" />
+                  <span>Google Maps Directions URL</span>
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={handleAutoGenerateMapsUrl}
+                    className="px-2 py-0.5 text-[10px] font-bold bg-brand-600 hover:bg-brand-700 text-white rounded-md transition-colors shadow-2xs"
+                    title="Automatically create Google Maps link using your shop address"
+                  >
+                    ⚡ Auto-Generate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSearchOnGoogleMaps}
+                    className="px-2 py-0.5 text-[10px] font-semibold bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-md transition-colors"
+                    title="Search your shop on Google Maps"
+                  >
+                    🔍 Find
+                  </button>
+                </div>
+              </div>
               <input
                 type="url"
                 value={googleMapsUrl}
                 onChange={(e) => setGoogleMapsUrl(e.target.value)}
-                placeholder="https://maps.google.com/?q=..."
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                placeholder="https://maps.app.goo.gl/... or click Auto-Generate"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none"
               />
-              <p className="text-[10px] text-slate-400 mt-1">
-                Used for the 1-tap "Navigate" button on the customer page.
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                Click <strong>Auto-Generate</strong> to instantly create a link from your address, or open Google Maps app &gt; Share &gt; Copy Link.
               </p>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Google Review Submission URL
-              </label>
+            {/* Google Review Submission */}
+            <div className="space-y-2 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>Google Review Submission URL</span>
+                </label>
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
+                  Boosts 5-Star Rating
+                </span>
+              </div>
               <input
                 type="url"
                 value={googleReviewUrl}
                 onChange={(e) => setGoogleReviewUrl(e.target.value)}
-                placeholder="https://g.page/r/review/..."
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                placeholder="https://g.page/r/.../review"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none"
               />
-              <p className="text-[10px] text-slate-400 mt-1">
-                Direct link that opens 5-star review form on the customer's phone.
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                Open Google Maps app with your business Gmail &gt; Tap <strong>Ask for reviews</strong> &gt; Copy link and paste here.
               </p>
             </div>
           </div>
