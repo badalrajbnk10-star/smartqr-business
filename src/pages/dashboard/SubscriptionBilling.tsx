@@ -16,13 +16,15 @@ import {
   QrCode,
   MessageCircle,
   X,
-  ExternalLink
+  ExternalLink,
+  Download
 } from 'lucide-react';
 import { useBusiness } from '../../context/BusinessContext';
 import { useAuth } from '../../context/AuthContext';
 import { DEFAULT_PLANS } from '../../lib/supabase';
 import { Plan } from '../../types/database';
 import { fetchPlatformSettings, DEFAULT_PLATFORM_SETTINGS, PlatformSettings } from '../../lib/settings';
+import { generateTaxInvoicePDF } from '../../lib/invoice';
 
 export const SubscriptionBilling: React.FC = () => {
   const { user } = useAuth();
@@ -103,6 +105,47 @@ export const SubscriptionBilling: React.FC = () => {
     const amountRupees = (plan.price_paise / 100).toFixed(2);
     const note = encodeURIComponent(`SmartQR ${plan.name} Plan`);
     return `upi://pay?pa=${officialUpiId}&pn=${encodeURIComponent(officialPayeeName)}&am=${amountRupees}&cu=INR&tn=${note}`;
+  };
+
+  const handleDownloadInvoice = () => {
+    const customSub = (currentBusiness?.opening_hours as any)?._subscription;
+    const planName = customSub?.plan_name || activePlan?.name || 'Professional';
+    const planPrice = (customSub?.amount_paise || activePlan?.price_paise || 19900) / 100;
+
+    const activatedDate = customSub?.activated_at
+      ? new Date(customSub.activated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+      : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    const expiryDate = customSub?.expires_at
+      ? new Date(customSub.expires_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+      : trialRemainingTime.expiresAt
+      ? new Date(trialRemainingTime.expiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+      : '30 Days From Activation';
+
+    const fullAddress = [
+      currentBusiness?.address,
+      currentBusiness?.city,
+      currentBusiness?.state,
+      currentBusiness?.pincode,
+    ].filter(Boolean).join(', ');
+
+    generateTaxInvoicePDF({
+      invoiceNumber: `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${(currentBusiness?.id || '7112').substring(0, 4).toUpperCase()}`,
+      invoiceDate: activatedDate,
+      customerName: user?.full_name || 'Badal Sarkar',
+      customerEmail: user?.email || undefined,
+      customerPhone: user?.phone || currentBusiness?.phone || undefined,
+      businessName: currentBusiness?.name || 'My Business Profile',
+      businessSlug: currentBusiness?.slug || 'my-business',
+      businessAddress: fullAddress || 'SmartQR Verified Merchant',
+      planName,
+      planPrice,
+      activatedAt: activatedDate,
+      expiresAt: expiryDate,
+      paymentMethod: customSub?.payment_method || 'Manual UPI Transfer',
+      utrNumber: customSub?.utr || 'VERIFIED-UPI',
+      status: 'VERIFIED',
+    });
   };
 
   return (
@@ -214,11 +257,22 @@ export const SubscriptionBilling: React.FC = () => {
           )}
         </div>
 
-        <div className="text-right shrink-0">
-          <p className="text-3xl font-extrabold text-slate-900">
-            ₹{((activePlan?.price_paise || 9900) / 100).toFixed(0)}
-          </p>
-          <p className="text-xs text-slate-400">per month (manual UPI)</p>
+        <div className="text-right shrink-0 space-y-2">
+          <div>
+            <p className="text-3xl font-extrabold text-slate-900">
+              ₹{((activePlan?.price_paise || 9900) / 100).toFixed(0)}
+            </p>
+            <p className="text-xs text-slate-400">per month (manual UPI)</p>
+          </div>
+          {isPaidActive && (
+            <button
+              onClick={handleDownloadInvoice}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm transition-all active:scale-95"
+            >
+              <Download className="w-3.5 h-3.5 text-brand-400" />
+              <span>Download PDF Invoice</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -484,10 +538,11 @@ export const SubscriptionBilling: React.FC = () => {
                   </td>
                   <td className="py-3 text-right">
                     <button
-                      onClick={() => alert(`Verified receipt for ${activePlan?.name || 'Starter'} plan.`)}
-                      className="text-brand-600 font-bold hover:underline"
+                      onClick={handleDownloadInvoice}
+                      className="inline-flex items-center gap-1 text-brand-600 font-bold hover:underline"
                     >
-                      Download PDF
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download PDF</span>
                     </button>
                   </td>
                 </tr>

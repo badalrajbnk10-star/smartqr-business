@@ -17,6 +17,9 @@ interface BusinessContextType {
   businesses: Business[];
   currentBusiness: Business | null;
   setCurrentBusiness: (business: Business) => void;
+  switchBusiness: (business: Business) => void;
+  maxBusinessesAllowed: number;
+  canCreateNewBusiness: boolean;
   loading: boolean;
   createBusiness: (businessData: Partial<Business>) => Promise<{ success: boolean; business?: Business; error?: string }>;
   updateBusiness: (id: string, updates: Partial<Business>) => Promise<{ success: boolean; error?: string }>;
@@ -320,10 +323,14 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             });
           }
 
+          const savedBizId = localStorage.getItem('smartqr_active_biz_id');
+          const targetBiz = normalizedList.find((b) => b.id === savedBizId) || normalizedList[0];
+
           setBusinesses(normalizedList);
-          setCurrentBusiness(normalizedList[0]);
-          setSubscription(normalizedList[0].subscription || null);
-          localStorage.setItem(ACTIVE_BIZ_KEY, JSON.stringify(normalizedList[0]));
+          setCurrentBusiness(targetBiz);
+          setSubscription(targetBiz.subscription || null);
+          localStorage.setItem(ACTIVE_BIZ_KEY, JSON.stringify(targetBiz));
+          localStorage.setItem('smartqr_active_biz_id', targetBiz.id);
         } else {
           // Fresh New Owner: Provision clean starter profile (ZERO fake address/phone)
           const ownerSlug = (user.full_name || 'my-business')
@@ -433,6 +440,15 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const createBusiness = async (businessData: Partial<Business>) => {
     if (!user) return { success: false, error: 'User not logged in' };
 
+    const currentPlanSlug = activePlanToDisplay?.slug || 'starter';
+    const maxAllowed = currentPlanSlug === 'business-plus' ? 3 : 1;
+    if (businesses.length >= maxAllowed) {
+      return {
+        success: false,
+        error: `Your current ${activePlanToDisplay?.name || 'Starter'} plan allows a maximum of ${maxAllowed} business profile${maxAllowed > 1 ? 's' : ''}. Upgrade to Business Plus (₹399/mo) to manage up to 3 separate businesses with independent QR codes.`
+      };
+    }
+
     try {
       const rawSlug = businessData.slug || businessData.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || `biz-${Date.now()}`;
       const slug = rawSlug.replace(/^-|-$/g, '');
@@ -515,6 +531,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         };
 
         await supabase.from('qr_codes').insert(newQR);
+        localStorage.setItem('smartqr_active_biz_id', insertedBiz.id);
         await loadData();
         return { success: true, business: insertedBiz };
       }
@@ -741,12 +758,25 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       ? (subscription.plan || DEFAULT_PLANS[0])
       : (subscription?.status === 'trialing' ? TRIAL_PLAN : null);
 
+  const maxBusinessesAllowed = activePlanToDisplay?.slug === 'business-plus' ? 3 : 1;
+  const canCreateNewBusiness = businesses.length < maxBusinessesAllowed;
+
+  const switchBusiness = (biz: Business) => {
+    setCurrentBusiness(biz);
+    setSubscription(biz.subscription || null);
+    localStorage.setItem(ACTIVE_BIZ_KEY, JSON.stringify(biz));
+    localStorage.setItem('smartqr_active_biz_id', biz.id);
+  };
+
   return (
     <BusinessContext.Provider
       value={{
         businesses,
         currentBusiness,
         setCurrentBusiness,
+        switchBusiness,
+        maxBusinessesAllowed,
+        canCreateNewBusiness,
         loading,
         createBusiness,
         updateBusiness,

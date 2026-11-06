@@ -36,6 +36,9 @@ export const DashboardLayout: React.FC = () => {
     businesses,
     currentBusiness,
     setCurrentBusiness,
+    switchBusiness,
+    maxBusinessesAllowed,
+    canCreateNewBusiness,
     trialRemainingTime,
     subscription,
     activePlan,
@@ -46,6 +49,7 @@ export const DashboardLayout: React.FC = () => {
   const navigate = useNavigate();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [businessDropdownOpen, setBusinessDropdownOpen] = useState(false);
+  const [planLimitModalOpen, setPlanLimitModalOpen] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [paywallError, setPaywallError] = useState<string | null>(null);
 
@@ -114,11 +118,16 @@ export const DashboardLayout: React.FC = () => {
           </span>
         </div>
 
-        {/* Business Selector */}
+        {/* Business Selector & Multi-Business Switcher */}
         <div className="p-4 border-b border-slate-800 relative shrink-0">
-          <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5 block">
-            Current Business
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block">
+              Current Business
+            </label>
+            <span className="text-[10px] font-bold text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded-full border border-brand-500/20">
+              {businesses.length}/{maxBusinessesAllowed} {businesses.length > 1 ? 'Profiles' : 'Profile'}
+            </span>
+          </div>
           <button
             onClick={() => setBusinessDropdownOpen(!businessDropdownOpen)}
             className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-left transition-colors"
@@ -137,30 +146,57 @@ export const DashboardLayout: React.FC = () => {
           {/* Dropdown for multi-business */}
           {businessDropdownOpen && (
             <div className="absolute top-full left-4 right-4 mt-1 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-30 py-1 overflow-hidden">
+              <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-700/60 flex items-center justify-between">
+                <span>Select Active Business</span>
+                <span>{activePlan?.name || 'Starter'} Plan</span>
+              </div>
               {businesses.map((biz) => (
                 <button
                   key={biz.id}
                   onClick={() => {
-                    setCurrentBusiness(biz);
+                    switchBusiness(biz);
                     setBusinessDropdownOpen(false);
                   }}
-                  className={`w-full text-left px-3 py-2 text-xs font-medium hover:bg-slate-700/80 transition-colors flex items-center justify-between ${
+                  className={`w-full text-left px-3 py-2.5 text-xs font-medium hover:bg-slate-700/80 transition-colors flex items-center justify-between ${
                     biz.id === currentBusiness?.id ? 'text-brand-400 bg-slate-700/50' : 'text-slate-300'
                   }`}
                 >
-                  <span className="truncate">{biz.name}</span>
-                  {biz.id === currentBusiness?.id && <span className="w-1.5 h-1.5 rounded-full bg-brand-400"></span>}
+                  <div className="truncate">
+                    <p className="truncate font-semibold">{biz.name}</p>
+                    <p className="text-[10px] text-slate-400 font-mono truncate">/b/{biz.slug}</p>
+                  </div>
+                  {biz.id === currentBusiness?.id && <span className="w-2 h-2 rounded-full bg-brand-400 shrink-0 ml-2"></span>}
                 </button>
               ))}
+
               <div className="border-t border-slate-700/60 mt-1 pt-1">
-                <Link
-                  to="/dashboard/profile?new=true"
-                  onClick={() => setBusinessDropdownOpen(false)}
-                  className="w-full text-left px-3 py-2 text-xs font-semibold text-brand-400 hover:bg-slate-700/80 flex items-center gap-1.5"
-                >
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  Add New Business Profile
-                </Link>
+                {canCreateNewBusiness ? (
+                  <Link
+                    to="/dashboard/profile?new=true"
+                    onClick={() => setBusinessDropdownOpen(false)}
+                    className="w-full text-left px-3 py-2 text-xs font-semibold text-brand-400 hover:bg-slate-700/80 flex items-center gap-1.5"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>+ Add Business Profile ({businesses.length}/{maxBusinessesAllowed})</span>
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBusinessDropdownOpen(false);
+                      setPlanLimitModalOpen(true);
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs font-semibold text-amber-400 hover:bg-slate-700/80 flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      <span>Add Business Profile</span>
+                    </span>
+                    <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30">
+                      {businesses.length}/{maxBusinessesAllowed} Limit
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -453,6 +489,59 @@ export const DashboardLayout: React.FC = () => {
               <button onClick={handleLogout} className="w-full text-center py-2 text-xs font-semibold text-red-400">
                 Sign Out
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Plan Limit Modal */}
+      {planLimitModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 space-y-4 shadow-2xl text-slate-900 relative">
+            <button
+              onClick={() => setPlanLimitModalOpen(false)}
+              className="absolute top-5 right-5 p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <Building2 className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+                Plan Limit: {businesses.length} / {maxBusinessesAllowed} Profiles
+              </span>
+              <h3 className="text-lg font-black text-slate-900">
+                {maxBusinessesAllowed === 1 ? 'Upgrade to Business Plus for 3 Businesses' : 'Maximum Limit of 3 Businesses Reached'}
+              </h3>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              {maxBusinessesAllowed === 1
+                ? 'Your current Starter (₹99) / Professional (₹199) plan allows 1 active business profile. Upgrade to the Business Plus (₹399/mo) plan to create and manage up to 3 separate businesses—each with its own independent dynamic QR code, catalog, reviews, and branding!'
+                : 'You have already reached the maximum limit of 3 separate business profiles included with the Business Plus (₹399) plan.'}
+            </p>
+
+            <div className="pt-2 flex items-center gap-2">
+              <button
+                onClick={() => setPlanLimitModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-colors"
+              >
+                Close
+              </button>
+              {maxBusinessesAllowed === 1 && (
+                <button
+                  onClick={() => {
+                    setPlanLimitModalOpen(false);
+                    navigate('/dashboard/subscription');
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-md shadow-brand-500/25 transition-all flex items-center justify-center gap-1.5"
+                >
+                  <span>Upgrade to ₹399</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
         </div>

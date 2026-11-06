@@ -19,11 +19,13 @@ import {
   Edit2,
   AlertTriangle,
   Play,
-  Pause
+  Pause,
+  Download
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { supabaseUrl, supabaseAnonKey, DEFAULT_PLANS } from '../../lib/supabase';
 import { fetchPlatformSettings, savePlatformSettings, DEFAULT_PLATFORM_SETTINGS, PlatformSettings } from '../../lib/settings';
+import { generateTaxInvoicePDF } from '../../lib/invoice';
 
 interface PendingPaymentItem {
   businessId: string;
@@ -934,6 +936,32 @@ export const AdminPayments: React.FC = () => {
                               Pause Now
                             </button>
                           )}
+
+                          <button
+                            onClick={() => {
+                              const bizId = pay.businessId || '7112';
+                              const bSlug = (pay as any).businessSlug || pay.businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                              generateTaxInvoicePDF({
+                                invoiceNumber: `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${bizId.substring(0, 4).toUpperCase()}`,
+                                invoiceDate: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+                                customerName: pay.customerName || 'Valued Business Owner',
+                                customerPhone: pay.customerPhone,
+                                businessName: pay.businessName,
+                                businessSlug: bSlug,
+                                planName: pay.planName,
+                                planPrice: pay.amountPaise / 100,
+                                activatedAt: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+                                expiresAt: pay.expiresAt ? new Date(pay.expiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '30 Days',
+                                paymentMethod: pay.method || 'Manual UPI Transfer',
+                                utrNumber: pay.utr,
+                                status: 'VERIFIED',
+                              });
+                            }}
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                            title="Download Verified Tax Invoice PDF"
+                          >
+                            <Download className="w-3.5 h-3.5 text-brand-400" />
+                          </button>
                         </div>
                       ) : (
                         <span className="text-slate-500 text-[11px] font-mono">Gateway Mandate</span>

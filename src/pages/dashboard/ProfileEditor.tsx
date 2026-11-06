@@ -32,7 +32,15 @@ const BUSINESS_CATEGORIES = [
 ];
 
 export const ProfileEditor: React.FC = () => {
-  const { currentBusiness, updateBusiness, createBusiness } = useBusiness();
+  const {
+    currentBusiness,
+    updateBusiness,
+    createBusiness,
+    businesses,
+    maxBusinessesAllowed,
+    canCreateNewBusiness,
+    activePlan
+  } = useBusiness();
   const [searchParams] = useSearchParams();
   const isNew = searchParams.get('new') === 'true';
 
@@ -196,6 +204,28 @@ export const ProfileEditor: React.FC = () => {
         <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-xs sm:text-sm flex items-center gap-2">
           <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {isNew && !canCreateNewBusiness && (
+        <div className="p-5 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 text-xs sm:text-sm space-y-2">
+          <div className="flex items-center gap-2 font-bold">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+            <span>Business Limit Reached ({businesses.length}/{maxBusinessesAllowed})</span>
+          </div>
+          <p className="text-amber-800 leading-relaxed text-xs">
+            Your current <strong>{activePlan?.name || 'Starter'}</strong> plan allows a maximum of <strong>{maxBusinessesAllowed} business profile</strong>.
+            To add up to <strong>3 separate businesses</strong>—each with its own independent dynamic QR code, catalog, reviews, and branding—please upgrade to <strong>Business Plus (₹399/mo)</strong>.
+          </p>
+          <div className="pt-1">
+            <a
+              href="/dashboard/subscription"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow-sm transition-all"
+            >
+              <span>Upgrade to Business Plus (₹399)</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
         </div>
       )}
 
@@ -452,10 +482,11 @@ export const ProfileEditor: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <DirectPhotoUpload
-                label="Business Logo (Square)"
+                label="Business Logo (Square 1:1)"
                 value={logoUrl}
                 onChange={setLogoUrl}
-                maxDimension={500}
+                maxDimension={600}
+                initialAspectRatio={1}
                 aspectHint="Square photo for QR center & profile picture"
                 placeholderText="Upload Logo from Device / Camera"
               />
@@ -463,10 +494,11 @@ export const ProfileEditor: React.FC = () => {
 
             <div>
               <DirectPhotoUpload
-                label="Cover Banner (Landscape)"
+                label="Cover Banner (Landscape 16:9)"
                 value={bannerUrl}
                 onChange={setBannerUrl}
                 maxDimension={1200}
+                initialAspectRatio={16 / 9}
                 aspectHint="Wide cover photo displayed at top of customer landing page"
                 placeholderText="Upload Banner from Device / Camera"
               />
@@ -477,8 +509,8 @@ export const ProfileEditor: React.FC = () => {
         <div className="pt-4 flex justify-end">
           <button
             type="submit"
-            disabled={saving}
-            className="inline-flex items-center gap-2 px-7 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm shadow-md shadow-brand-500/25 transition-all"
+            disabled={saving || (isNew && !canCreateNewBusiness)}
+            className="inline-flex items-center gap-2 px-7 py-3 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm shadow-md shadow-brand-500/25 transition-all"
           >
             <Save className="w-4 h-4" />
             <span>{saving ? 'Saving Changes...' : isNew ? 'Create Business Profile' : 'Save Profile Changes'}</span>

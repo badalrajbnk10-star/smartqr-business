@@ -306,12 +306,13 @@ export const CatalogManager: React.FC = () => {
 
               <div>
                 <DirectPhotoUpload
-                  label="Dish Photo (Direct Upload from Device)"
+                  label="Item / Dish Photo (Direct Upload with Crop)"
                   value={menuImage}
                   onChange={setMenuImage}
                   maxDimension={800}
+                  initialAspectRatio={1}
                   aspectHint="Direct photo from phone gallery or camera"
-                  placeholderText="Choose Dish Photo from Device"
+                  placeholderText="Choose Item Photo & Crop"
                 />
               </div>
             </div>

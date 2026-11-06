@@ -106,9 +106,10 @@ export const MediaManager: React.FC = () => {
               label="Select Photo from Device *"
               value={photoUrl}
               onChange={setPhotoUrl}
-              aspectHint="Supports camera photos, phone gallery, JPG, PNG & WebP"
-              placeholderText="Tap to Choose Photo from Device / Camera"
+              aspectHint="Supports camera photos, phone gallery, JPG, PNG & WebP with instant crop"
+              placeholderText="Tap to Choose Photo & Crop"
               maxDimension={1200}
+              initialAspectRatio={1}
             />
           </div>
 

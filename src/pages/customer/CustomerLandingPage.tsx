@@ -51,10 +51,10 @@ export const CustomerLandingPage: React.FC = () => {
       }
 
       try {
-        // Ultra-fast direct REST query (0.01s lightning speed, no locks, never cached)
+        const cleanSlug = (slug || '').trim().toLowerCase().replace(/\/$/, '');
         let data: any = null;
         try {
-          const res = await fetch(`${supabaseUrl}/rest/v1/businesses?slug=eq.${encodeURIComponent(slug || '')}&select=*`, {
+          const res = await fetch(`${supabaseUrl}/rest/v1/businesses?or=(slug.eq.${cleanSlug},slug.ilike.${cleanSlug},id.eq.${cleanSlug})&select=*`, {
             headers: {
               'apikey': supabaseAnonKey,
               'Authorization': `Bearer ${supabaseAnonKey}`,
@@ -69,8 +69,14 @@ export const CustomerLandingPage: React.FC = () => {
               data = arr[0];
             }
           }
-        } catch {
-          const fallback = await supabase.from('businesses').select('*').eq('slug', slug).maybeSingle();
+        } catch {}
+
+        if (!data) {
+          const fallback = await supabase
+            .from('businesses')
+            .select('*')
+            .or(`slug.ilike.${cleanSlug},id.eq.${cleanSlug}`)
+            .maybeSingle();
           data = fallback.data;
         }
 
@@ -194,7 +200,8 @@ export const CustomerLandingPage: React.FC = () => {
   const sub = (business?.opening_hours as any)?._subscription;
   const isSubscriptionExpired = sub?.expires_at && Date.now() >= new Date(sub.expires_at).getTime();
   const isTrialExpired =
-    (business?.status === 'trialing' || !sub) &&
+    business?.status === 'trialing' &&
+    !sub &&
     business?.created_at &&
     Date.now() >= new Date(business.created_at).getTime() + 24 * 60 * 60 * 1000;
 
@@ -427,12 +434,14 @@ export const CustomerLandingPage: React.FC = () => {
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    {Object.entries(business.opening_hours).map(([day, hours]) => (
-                      <div key={day} className="flex justify-between py-1 border-b border-slate-200/50 capitalize text-slate-600">
-                        <span className="font-medium">{day.substring(0, 3)}:</span>
-                        <span>{hours.closed ? 'Closed' : `${hours.open} - ${hours.close}`}</span>
-                      </div>
-                    ))}
+                    {Object.entries(business.opening_hours)
+                      .filter(([day, val]) => !day.startsWith('_') && val && typeof val === 'object' && ('open' in val || 'closed' in val))
+                      .map(([day, hours]: [string, any]) => (
+                        <div key={day} className="flex justify-between py-1 border-b border-slate-200/50 capitalize text-slate-600">
+                          <span className="font-medium">{day.substring(0, 3)}:</span>
+                          <span>{hours.closed ? 'Closed' : `${hours.open || '9:00 AM'} - ${hours.close || '8:00 PM'}`}</span>
+                        </div>
+                      ))}
                   </div>
                 </div>
               )}

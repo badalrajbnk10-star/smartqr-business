@@ -1,6 +1,16 @@
 import React, { useRef, useState } from 'react';
-import { UploadCloud, Image as ImageIcon, Camera, X, CheckCircle2, RefreshCw, Link as LinkIcon } from 'lucide-react';
+import {
+  UploadCloud,
+  Image as ImageIcon,
+  Camera,
+  X,
+  CheckCircle2,
+  RefreshCw,
+  Link as LinkIcon,
+  Crop as CropIcon
+} from 'lucide-react';
 import { compressImageFile } from '../../lib/imageCompressor';
+import { ImageCropModal } from './ImageCropModal';
 
 interface DirectPhotoUploadProps {
   label: string;
@@ -11,6 +21,7 @@ interface DirectPhotoUploadProps {
   quality?: number;
   format?: 'image/jpeg' | 'image/webp' | 'image/png';
   placeholderText?: string;
+  initialAspectRatio?: number; // 1 for square, 16/9 for banner, 0 for free
 }
 
 export const DirectPhotoUpload: React.FC<DirectPhotoUploadProps> = ({
@@ -19,9 +30,10 @@ export const DirectPhotoUpload: React.FC<DirectPhotoUploadProps> = ({
   onChange,
   aspectHint = 'JPG, PNG or WebP from Phone / PC',
   maxDimension = 1200,
-  quality = 0.82,
+  quality = 0.85,
   format = 'image/jpeg',
   placeholderText = 'Select Photo from Device / Camera',
+  initialAspectRatio = 1,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -29,35 +41,40 @@ export const DirectPhotoUpload: React.FC<DirectPhotoUploadProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const processFile = async (file: File) => {
+  // Crop Modal state
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [rawImageForCrop, setRawImageForCrop] = useState<string>('');
+
+  const handleSelectedFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
       setError('Please select a valid image file (JPG, PNG, WebP).');
       return;
     }
 
     setError(null);
-    setIsProcessing(true);
-    try {
-      const res = await compressImageFile(file, {
-        maxWidth: maxDimension,
-        maxHeight: maxDimension,
-        quality,
-        format,
-      });
-      onChange(res.dataUrl);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to process photo.');
-    } finally {
-      setIsProcessing(false);
-    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setRawImageForCrop(reader.result);
+        setCropModalOpen(true);
+      }
+    };
+    reader.onerror = () => {
+      setError('Failed to read image file.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCropComplete = (croppedDataUrl: string) => {
+    setCropModalOpen(false);
+    onChange(croppedDataUrl);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      processFile(file);
+      handleSelectedFile(file);
     }
-    // reset input so the same file can be re-selected if removed
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -68,7 +85,14 @@ export const DirectPhotoUpload: React.FC<DirectPhotoUploadProps> = ({
     setDragOver(false);
     const file = e.dataTransfer.files?.[0];
     if (file) {
-      processFile(file);
+      handleSelectedFile(file);
+    }
+  };
+
+  const handleOpenCropOnExisting = () => {
+    if (value) {
+      setRawImageForCrop(value);
+      setCropModalOpen(true);
     }
   };
 
@@ -113,8 +137,8 @@ export const DirectPhotoUpload: React.FC<DirectPhotoUploadProps> = ({
           />
 
           {value ? (
-            <div className="relative group rounded-2xl border-2 border-slate-200 overflow-hidden bg-slate-50 p-2 flex items-center gap-4">
-              <div className="w-20 h-20 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200 flex items-center justify-center">
+            <div className="relative group rounded-2xl border-2 border-slate-200 overflow-hidden bg-slate-50 p-2.5 flex items-center gap-4">
+              <div className="w-20 h-20 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200 flex items-center justify-center relative">
                 <img
                   src={value}
                   alt="Selected Preview"
@@ -125,25 +149,38 @@ export const DirectPhotoUpload: React.FC<DirectPhotoUploadProps> = ({
               <div className="flex-1 min-w-0 space-y-1">
                 <div className="flex items-center gap-1 text-xs font-bold text-emerald-700">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Photo Ready</span>
+                  <span>Photo Ready (Cropped & Optimized)</span>
                 </div>
                 <p className="text-[11px] text-slate-500 truncate">
-                  Direct photo loaded & optimized
+                  High quality image ready for digital profile & QR
                 </p>
-                <div className="flex items-center gap-2 pt-1">
+                <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                  {/* Crop / Adjust Button */}
+                  <button
+                    type="button"
+                    onClick={handleOpenCropOnExisting}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors shadow-xs"
+                  >
+                    <CropIcon className="w-3 h-3" />
+                    <span>Crop / Adjust</span>
+                  </button>
+
+                  {/* Change Photo Button */}
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isProcessing}
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-brand-50 text-brand-700 text-xs font-semibold hover:bg-brand-100 transition-colors"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-50 text-brand-700 text-xs font-semibold hover:bg-brand-100 transition-colors"
                   >
                     <RefreshCw className="w-3 h-3" />
                     <span>Change</span>
                   </button>
+
+                  {/* Remove Button */}
                   <button
                     type="button"
                     onClick={() => onChange('')}
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100 transition-colors"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100 transition-colors"
                   >
                     <X className="w-3 h-3" />
                     <span>Remove</span>
@@ -181,12 +218,14 @@ export const DirectPhotoUpload: React.FC<DirectPhotoUploadProps> = ({
                       {placeholderText}
                     </p>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      {aspectHint}
+                      {aspectHint} • Includes Photo Crop Tool
                     </p>
                   </div>
-                  <span className="mt-1 px-3 py-1 rounded-full bg-brand-600 text-white text-[11px] font-bold shadow-sm">
-                    📁 Choose Photo from Device
-                  </span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="px-3 py-1 rounded-full bg-brand-600 text-white text-[11px] font-bold shadow-sm">
+                      📁 Choose Photo & Crop
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -199,6 +238,16 @@ export const DirectPhotoUpload: React.FC<DirectPhotoUploadProps> = ({
           {error}
         </p>
       )}
+
+      {/* Interactive Photo Crop Modal */}
+      <ImageCropModal
+        isOpen={cropModalOpen}
+        imageSrc={rawImageForCrop}
+        onCropComplete={handleCropComplete}
+        onCancel={() => setCropModalOpen(false)}
+        initialAspectRatio={initialAspectRatio}
+        title={`Crop & Adjust ${label}`}
+      />
     </div>
   );
 };
