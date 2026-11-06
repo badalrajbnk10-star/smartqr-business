@@ -3,6 +3,16 @@ import { Business, QRCode, Subscription, Plan, MenuItem, BusinessService } from 
 import { useAuth } from './AuthContext';
 import { supabase, isDemoMode, DEFAULT_PLANS, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 
+export interface SubscriptionValidity {
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+  isExpired: boolean;
+  isPaid: boolean;
+  expiresAt: string | null;
+}
+
 interface BusinessContextType {
   businesses: Business[];
   currentBusiness: Business | null;
@@ -12,7 +22,7 @@ interface BusinessContextType {
   updateBusiness: (id: string, updates: Partial<Business>) => Promise<{ success: boolean; error?: string }>;
   updateQRCode: (qrCodeId: string, updates: Partial<QRCode>) => Promise<{ success: boolean; error?: string }>;
   refreshData: () => Promise<void>;
-  trialRemainingTime: { hours: number; minutes: number; isExpired: boolean };
+  trialRemainingTime: SubscriptionValidity;
   activePlan: Plan | null;
   subscription: Subscription | null;
   upgradeSubscription: (planId: string, paymentResponse: any) => Promise<boolean>;
@@ -82,40 +92,86 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   });
 
-  // Compute 24-hr trial countdown
-  const [trialRemainingTime, setTrialRemainingTime] = useState({
+  // Live countdown timer for both 1-Month Paid Plans and 24-Hr Free Trials
+  const [trialRemainingTime, setTrialRemainingTime] = useState<SubscriptionValidity>({
+    days: 0,
     hours: 24,
     minutes: 0,
+    seconds: 0,
     isExpired: false,
+    isPaid: false,
+    expiresAt: null,
   });
 
-  // Calculate remaining trial time accurately
+  // Calculate remaining plan time accurately second-by-second
   useEffect(() => {
-    if (!subscription) return;
-
-    if (subscription.status === 'active' || currentBusiness?.status === 'active') {
-      setTrialRemainingTime({ hours: 720, minutes: 0, isExpired: false });
-      return;
-    }
+    if (!subscription && !currentBusiness) return;
 
     const checkTime = () => {
-      const expiry = new Date(subscription.trial_expires_at).getTime();
-      const now = Date.now();
-      const diff = expiry - now;
+      const customPaidSub = (currentBusiness?.opening_hours as any)?._subscription;
+      const isPaid = (subscription?.status === 'active' || customPaidSub?.status === 'active');
+
+      let targetExpiry = 0;
+      let expiresAtStr: string | null = null;
+
+      if (isPaid && (customPaidSub?.expires_at || subscription?.current_period_end)) {
+        expiresAtStr = customPaidSub?.expires_at || subscription?.current_period_end || null;
+        targetExpiry = new Date(expiresAtStr!).getTime();
+      } else if (subscription?.trial_expires_at) {
+        expiresAtStr = subscription.trial_expires_at;
+        targetExpiry = new Date(expiresAtStr).getTime();
+      } else if (currentBusiness?.created_at) {
+        targetExpiry = new Date(currentBusiness.created_at).getTime() + 24 * 60 * 60 * 1000;
+        expiresAtStr = new Date(targetExpiry).toISOString();
+      }
+
+      if (!targetExpiry) {
+        setTrialRemainingTime({
+          days: 0,
+          hours: 0,
+          minutes: 0,
+          seconds: 0,
+          isExpired: true,
+          isPaid,
+          expiresAt: null,
+        });
+        return;
+      }
+
+      const diff = targetExpiry - Date.now();
 
       if (diff <= 0) {
-        setTrialRemainingTime({ hours: 0, minutes: 0, isExpired: true });
+        setTrialRemainingTime({
+          days: 0,
+          hours: 0,
+          minutes: 0,
+          seconds: 0,
+          isExpired: true,
+          isPaid,
+          expiresAt: expiresAtStr,
+        });
       } else {
-        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        setTrialRemainingTime({ hours, minutes, isExpired: false });
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+        setTrialRemainingTime({
+          days,
+          hours,
+          minutes,
+          seconds,
+          isExpired: false,
+          isPaid,
+          expiresAt: expiresAtStr,
+        });
       }
     };
 
     checkTime();
     const interval = setInterval(checkTime, 1000);
     return () => clearInterval(interval);
-  }, [subscription]);
+  }, [subscription, currentBusiness]);
 
   const loadData = async () => {
     if (!user) {
@@ -206,10 +262,11 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             let sub: Subscription;
             if (activePaidSub) {
               const matchedPlan = DEFAULT_PLANS.find(p => p.id === activePaidSub.plan_id || p.slug === activePaidSub.plan_slug) || DEFAULT_PLANS[0];
+              const isPaidExpired = activePaidSub.expires_at && Date.now() >= new Date(activePaidSub.expires_at).getTime();
               sub = {
                 ...activePaidSub,
                 plan: matchedPlan,
-                status: 'active',
+                status: isPaidExpired ? 'expired' : 'active',
               };
             } else if (pendingSub && pendingSub.status === 'pending') {
               const matchedPlan = DEFAULT_PLANS.find(p => p.id === pendingSub.plan_id || p.slug === pendingSub.plan_slug) || DEFAULT_PLANS[0];
@@ -252,10 +309,12 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               ? b.photos
               : (Array.isArray((b.opening_hours as any)?._photos) ? (b.opening_hours as any)?._photos : []);
 
+            const isSubActive = sub.status === 'active';
+            const bizStatus = isSubActive ? 'active' : (isTrialOver || sub.status === 'expired' ? 'expired' : 'trialing');
             normalizedList.push({
               ...b,
               photos: bizPhotos,
-              status: sub.status === 'active' ? 'active' : (isTrialOver ? 'expired' : 'trialing'),
+              status: bizStatus,
               qr_code: qr,
               subscription: sub,
             });
@@ -554,7 +613,15 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       };
 
       setSubscription(updatedSub);
-      setTrialRemainingTime({ hours: 720, minutes: 0, isExpired: false });
+      setTrialRemainingTime({
+        days: 30,
+        hours: 0,
+        minutes: 0,
+        seconds: 0,
+        isExpired: false,
+        isPaid: true,
+        expiresAt: periodEnd.toISOString(),
+      });
 
       if (currentBusiness) {
         const currentHours = ((currentBusiness.opening_hours || {}) as any);

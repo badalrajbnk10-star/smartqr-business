@@ -191,32 +191,34 @@ export const CustomerLandingPage: React.FC = () => {
   }
 
   // Suspended or Expired Status Screen (Preserves QR Code destination URL)
+  const sub = (business?.opening_hours as any)?._subscription;
+  const isSubscriptionExpired = sub?.expires_at && Date.now() >= new Date(sub.expires_at).getTime();
   const isTrialExpired =
-    business?.status === 'trialing' &&
+    (business?.status === 'trialing' || !sub) &&
     business?.created_at &&
     Date.now() >= new Date(business.created_at).getTime() + 24 * 60 * 60 * 1000;
 
-  if (business?.status === 'suspended' || business?.status === 'expired' || isTrialExpired) {
+  if (business?.status === 'suspended' || business?.status === 'expired' || isTrialExpired || isSubscriptionExpired) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 text-white">
         <div className="max-w-md w-full bg-slate-800/80 border border-slate-700 rounded-3xl p-8 text-center space-y-5 shadow-2xl backdrop-blur-md">
           <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto">
             <Clock className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-extrabold tracking-tight">Business Profile Paused</h2>
+          <h2 className="text-2xl font-extrabold tracking-tight">Business Services Paused</h2>
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            The digital profile for <strong>{business?.name || 'this business'}</strong> is temporarily paused pending subscription renewal.
+            The digital profile and customer services for <strong>{business?.name || 'this business'}</strong> are temporarily paused because the 1-month subscription validity has ended.
           </p>
           <div className="p-4 bg-slate-900/80 rounded-2xl border border-slate-700 text-left text-xs text-slate-400 space-y-2">
             <p className="font-semibold text-slate-200">Are you the business owner?</p>
-            <p>Log in to your SmartQR dashboard to activate or renew your monthly plan via UPI AutoPay. Your QR codes will resume automatically.</p>
+            <p>Log in to your SmartQR dashboard and pay via UPI to renew your monthly plan. All QR services, review links, and catalog items will resume automatically.</p>
           </div>
           <div className="pt-2">
             <Link
               to="/login"
-              className="inline-block w-full py-3 px-4 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl text-sm transition-all"
+              className="inline-block w-full py-3 px-4 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl text-sm transition-all shadow-lg shadow-brand-500/20"
             >
-              Sign In to Owner Dashboard
+              Sign In to Renew Subscription via UPI
             </Link>
           </div>
         </div>

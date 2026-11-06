@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -22,6 +22,7 @@ import { useBusiness } from '../../context/BusinessContext';
 import { useAuth } from '../../context/AuthContext';
 import { DEFAULT_PLANS } from '../../lib/supabase';
 import { Plan } from '../../types/database';
+import { fetchPlatformSettings, DEFAULT_PLATFORM_SETTINGS, PlatformSettings } from '../../lib/settings';
 
 export const SubscriptionBilling: React.FC = () => {
   const { user } = useAuth();
@@ -34,6 +35,7 @@ export const SubscriptionBilling: React.FC = () => {
     refreshData
   } = useBusiness();
 
+  const [platformSettings, setPlatformSettings] = useState<PlatformSettings>(DEFAULT_PLATFORM_SETTINGS);
   const [selectedPlanForPayment, setSelectedPlanForPayment] = useState<Plan | null>(null);
   const [utrNumber, setUtrNumber] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -41,15 +43,22 @@ export const SubscriptionBilling: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    fetchPlatformSettings().then((s) => setPlatformSettings(s));
+  }, []);
+
   const pendingPayment = (currentBusiness?.opening_hours as any)?._pending_payment;
   const isPending = subscription?.status === 'pending' || pendingPayment?.status === 'pending';
-  const isActive = subscription?.status === 'active' || (currentBusiness?.opening_hours as any)?._subscription?.status === 'active';
-  const isTrial = !isActive && !isPending && subscription?.status === 'trialing';
-  const isSuspended = !isActive && !isPending && (currentBusiness?.status === 'suspended' || trialRemainingTime.isExpired);
+  const isPaidActive =
+    (subscription?.status === 'active' || (currentBusiness?.opening_hours as any)?._subscription?.status === 'active') &&
+    !trialRemainingTime.isExpired;
+  const isExpired =
+    trialRemainingTime.isExpired || currentBusiness?.status === 'expired' || subscription?.status === 'expired';
+  const isTrial = !isPaidActive && !isPending && !isExpired && subscription?.status === 'trialing';
 
-  const officialUpiId = '9931782577@ybl';
-  const officialPayeeName = 'Badal Sarkar';
-  const supportPhone = '+91 9931782577';
+  const officialUpiId = platformSettings.upi_id || '9931782577@ybl';
+  const officialPayeeName = platformSettings.payee_name || 'Badal Sarkar';
+  const supportPhone = platformSettings.support_phone || '+91 9931782577';
 
   const handleCopyUPI = () => {
     navigator.clipboard.writeText(officialUpiId);
@@ -139,17 +148,17 @@ export const SubscriptionBilling: React.FC = () => {
           </span>
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-2xl font-black text-slate-900">
-              {isActive
+              {isPaidActive
                 ? `${activePlan?.name || 'Starter'} Plan`
                 : isPending
                 ? `${pendingPayment?.plan_name || activePlan?.name || 'Selected'} Plan`
                 : `${activePlan?.name || 'Starter'} Plan`}
             </h2>
 
-            {isActive ? (
+            {isPaidActive ? (
               <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold flex items-center gap-1.5 shadow-sm">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                Active Subscription
+                Active (1-Month Timer Running)
               </span>
             ) : isPending ? (
               <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-300 text-xs font-bold flex items-center gap-1.5 shadow-sm animate-pulse">
@@ -162,21 +171,21 @@ export const SubscriptionBilling: React.FC = () => {
                 Trialing ({trialRemainingTime.hours}h {trialRemainingTime.minutes}m Left)
               </span>
             ) : (
-              <span className="px-3 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-bold flex items-center gap-1.5 shadow-sm">
+              <span className="px-3 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-bold flex items-center gap-1.5 shadow-sm animate-pulse">
                 <AlertCircle className="w-3.5 h-3.5 text-red-600" />
-                Expired (Payment Required)
+                Validity Expired — Public QR Paused
               </span>
             )}
           </div>
 
           <p className="text-xs text-slate-500 max-w-lg leading-relaxed">
-            {isActive
-              ? 'Your subscription is active. All dynamic QR codes and customer review pages are working 24/7.'
+            {isPaidActive
+              ? `Your monthly subscription is active. Time Remaining: ${trialRemainingTime.days} Days, ${trialRemainingTime.hours} Hours, ${trialRemainingTime.minutes} Mins, ${trialRemainingTime.seconds} Secs.`
               : isPending
               ? `You submitted UTR: ${pendingPayment?.utr || 'Pending'}. Our admin is verifying your payment with the bank. Once verified, your account is activated automatically.`
               : isTrial
               ? 'You are enjoying 24 hours of unrestricted free trial. Choose a monthly plan below and scan the UPI QR code to keep your business profile running.'
-              : 'Your 24-hour trial period has ended. Choose a monthly plan below to resume your dynamic QR code and customer reviews.'}
+              : 'Your subscription validity has ended. Customer QR scans and profile services are paused. Scan UPI QR below to renew and resume all services instantly.'}
           </p>
 
           {isPending && (
@@ -227,7 +236,7 @@ export const SubscriptionBilling: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {DEFAULT_PLANS.map((plan) => {
-            const isCurrent = activePlan?.id === plan.id && isActive;
+            const isCurrent = activePlan?.id === plan.id && isPaidActive;
             const isPendingForThis = isPending && pendingPayment?.plan_id === plan.id;
             const isPopular = plan.slug === 'professional';
 
@@ -449,7 +458,7 @@ export const SubscriptionBilling: React.FC = () => {
           Payment Receipts & Verification History
         </h3>
 
-        {isActive ? (
+        {isPaidActive ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>

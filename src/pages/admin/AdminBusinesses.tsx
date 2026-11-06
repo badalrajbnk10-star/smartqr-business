@@ -331,19 +331,38 @@ export const AdminBusinesses: React.FC = () => {
                     </td>
 
                     <td className="py-4 px-5">
-                      {biz.status === 'active' ? (
-                        <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
-                          Active Paid
-                        </span>
-                      ) : biz.status === 'suspended' ? (
-                        <span className="px-2.5 py-1 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] font-bold">
-                          Suspended
-                        </span>
-                      ) : (
-                        <span className="px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold">
-                          24h Trial
-                        </span>
-                      )}
+                      {(() => {
+                        const sub = biz.rawOpeningHours?._subscription;
+                        const isExpired = sub?.expires_at && Date.now() >= new Date(sub.expires_at).getTime();
+                        if (biz.status === 'suspended') {
+                          return (
+                            <span className="px-2.5 py-1 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] font-bold">
+                              Suspended
+                            </span>
+                          );
+                        }
+                        if (isExpired || biz.status === 'expired') {
+                          return (
+                            <span className="px-2.5 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] font-bold">
+                              Expired (Paused)
+                            </span>
+                          );
+                        }
+                        if (biz.status === 'active' || sub?.status === 'active') {
+                          const diff = sub?.expires_at ? new Date(sub.expires_at).getTime() - Date.now() : 0;
+                          const daysLeft = diff > 0 ? Math.ceil(diff / (1000 * 60 * 60 * 24)) : 30;
+                          return (
+                            <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
+                              Active ({daysLeft}d left)
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold">
+                            24h Trial
+                          </span>
+                        );
+                      })()}
                     </td>
 
                     <td className="py-4 px-5 font-bold text-slate-200">

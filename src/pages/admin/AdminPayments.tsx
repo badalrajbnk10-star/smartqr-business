@@ -14,10 +14,16 @@ import {
   Plus,
   X,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  QrCode,
+  Edit2,
+  AlertTriangle,
+  Play,
+  Pause
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { supabaseUrl, supabaseAnonKey, DEFAULT_PLANS } from '../../lib/supabase';
+import { fetchPlatformSettings, savePlatformSettings, DEFAULT_PLATFORM_SETTINGS, PlatformSettings } from '../../lib/settings';
 
 interface PendingPaymentItem {
   businessId: string;
@@ -36,6 +42,7 @@ interface PendingPaymentItem {
 
 interface CapturedPaymentRecord {
   id: string;
+  businessId?: string;
   businessName: string;
   customerName: string;
   customerEmail: string;
@@ -46,6 +53,10 @@ interface CapturedPaymentRecord {
   method: string;
   status: 'captured' | 'pending';
   date: string;
+  expiresAt?: string;
+  isExpired?: boolean;
+  daysRemaining?: number;
+  rawOpeningHours?: any;
 }
 
 interface SimpleBusinessOption {
@@ -68,6 +79,13 @@ export const AdminPayments: React.FC = () => {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [copiedUtr, setCopiedUtr] = useState<string | null>(null);
 
+  // Platform Settings (UPI ID & Payee Name)
+  const [settings, setSettings] = useState<PlatformSettings>(DEFAULT_PLATFORM_SETTINGS);
+  const [showEditUpiModal, setShowEditUpiModal] = useState(false);
+  const [newUpiId, setNewUpiId] = useState('');
+  const [newPayeeName, setNewPayeeName] = useState('');
+  const [savingUpi, setSavingUpi] = useState(false);
+
   // Manual Activation Modal State
   const [showManualModal, setShowManualModal] = useState(false);
   const [manualBizId, setManualBizId] = useState('');
@@ -79,6 +97,12 @@ export const AdminPayments: React.FC = () => {
   const fetchRealData = async () => {
     setLoading(true);
     try {
+      // 1. Fetch current UPI platform settings
+      const currentSettings = await fetchPlatformSettings();
+      setSettings(currentSettings);
+      setNewUpiId(currentSettings.upi_id);
+      setNewPayeeName(currentSettings.payee_name);
+
       const headers = {
         'apikey': supabaseAnonKey,
         'Authorization': `Bearer ${supabaseAnonKey}`,
@@ -137,11 +161,17 @@ export const AdminPayments: React.FC = () => {
           });
         }
 
-        // 2. Check for Captured Active Subscriptions
+        // 2. Check for Captured Active/Expired Subscriptions
         const activeSub = openingHours._subscription;
-        if (b.status === 'active' || (activeSub && activeSub.status === 'active')) {
+        if (activeSub || b.status === 'active') {
+          const expiresAtStr = activeSub?.expires_at;
+          const isExpired = expiresAtStr ? Date.now() >= new Date(expiresAtStr).getTime() : b.status === 'expired';
+          const diffMs = expiresAtStr ? new Date(expiresAtStr).getTime() - Date.now() : 0;
+          const daysRemaining = diffMs > 0 ? Math.ceil(diffMs / (1000 * 60 * 60 * 24)) : 0;
+
           captured.push({
             id: `biz-sub-${b.id}`,
+            businessId: b.id,
             businessName: b.name,
             customerName: ownerName,
             customerEmail: ownerEmail,
@@ -152,6 +182,10 @@ export const AdminPayments: React.FC = () => {
             method: activeSub?.payment_method || 'Manual UPI Transfer',
             status: 'captured',
             date: activeSub?.activated_at ? new Date(activeSub.activated_at).toLocaleString() : new Date(b.created_at).toLocaleString(),
+            expiresAt: expiresAtStr,
+            isExpired,
+            daysRemaining,
+            rawOpeningHours: openingHours,
           });
         }
       }
@@ -172,6 +206,8 @@ export const AdminPayments: React.FC = () => {
             method: 'UPI AutoPay',
             status: 'captured',
             date: s.created_at ? new Date(s.created_at).toLocaleString() : 'N/A',
+            daysRemaining: 30,
+            isExpired: false,
           });
         }
       }
@@ -199,7 +235,32 @@ export const AdminPayments: React.FC = () => {
     setTimeout(() => setCopiedUtr(null), 2500);
   };
 
-  // Approve & Activate Manual Payment
+  // Save new UPI ID directly from Super Admin
+  const handleSaveUpiQuick = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUpiId.trim()) return;
+    setSavingUpi(true);
+
+    const res = await savePlatformSettings({
+      upi_id: newUpiId.trim(),
+      payee_name: newPayeeName.trim() || 'Badal Sarkar',
+    });
+
+    setSavingUpi(false);
+    if (res.success) {
+      confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
+      setSettings((prev) => ({
+        ...prev,
+        upi_id: newUpiId.trim(),
+        payee_name: newPayeeName.trim() || 'Badal Sarkar',
+      }));
+      setShowEditUpiModal(false);
+      setActionSuccess(`UPI ID updated to "${newUpiId.trim()}". All customer QR codes will use this UPI ID.`);
+      setTimeout(() => setActionSuccess(null), 4000);
+    }
+  };
+
+  // Approve & Start 1-Month (30 Days) Timer
   const handleApprovePayment = async (item: PendingPaymentItem) => {
     setProcessingId(item.businessId);
     setActionError(null);
@@ -241,7 +302,7 @@ export const AdminPayments: React.FC = () => {
       if (res.ok) {
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
         setActionSuccess(
-          `Payment verified & approved! "${item.businessName}" is now ACTIVE on ${item.planName} Plan for 30 days.`
+          `Payment verified & approved! "${item.businessName}" is now ACTIVE. 1-Month Timer (30 Days) started.`
         );
         await fetchRealData();
       } else {
@@ -296,6 +357,94 @@ export const AdminPayments: React.FC = () => {
       }
     } catch (err: any) {
       setActionError(err.message || 'Network error.');
+    } finally {
+      setProcessingId(null);
+      setTimeout(() => setActionSuccess(null), 4000);
+    }
+  };
+
+  // Super Admin: Extend or Modify Timer for ANY Business
+  const handleExtendValidity = async (record: CapturedPaymentRecord, extraDays: number) => {
+    if (!record.businessId) return;
+    setProcessingId(record.businessId);
+
+    const currentExpiry = record.expiresAt ? new Date(record.expiresAt).getTime() : Date.now();
+    const baseTime = currentExpiry > Date.now() ? currentExpiry : Date.now();
+    const newExpiry = new Date(baseTime + extraDays * 24 * 60 * 60 * 1000);
+
+    const updatedHours = {
+      ...(record.rawOpeningHours || {}),
+      _subscription: {
+        ...(record.rawOpeningHours?._subscription || {}),
+        status: 'active',
+        expires_at: newExpiry.toISOString(),
+      },
+    };
+
+    try {
+      const res = await fetch(`${supabaseUrl}/rest/v1/businesses?id=eq.${record.businessId}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
+          status: 'active',
+          opening_hours: updatedHours,
+        }),
+      });
+
+      if (res.ok) {
+        setActionSuccess(`Extended validity by ${extraDays} days for "${record.businessName}".`);
+        await fetchRealData();
+      }
+    } catch {
+      setActionError('Failed to extend validity.');
+    } finally {
+      setProcessingId(null);
+      setTimeout(() => setActionSuccess(null), 4000);
+    }
+  };
+
+  // Super Admin: Instantly Pause/Expire Subscription
+  const handleExpireImmediately = async (record: CapturedPaymentRecord) => {
+    if (!record.businessId) return;
+    if (!window.confirm(`Expire & pause public services for "${record.businessName}" right now?`)) return;
+
+    setProcessingId(record.businessId);
+
+    const updatedHours = {
+      ...(record.rawOpeningHours || {}),
+      _subscription: {
+        ...(record.rawOpeningHours?._subscription || {}),
+        status: 'expired',
+        expires_at: new Date(Date.now() - 1000).toISOString(),
+      },
+    };
+
+    try {
+      const res = await fetch(`${supabaseUrl}/rest/v1/businesses?id=eq.${record.businessId}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
+          status: 'expired',
+          opening_hours: updatedHours,
+        }),
+      });
+
+      if (res.ok) {
+        setActionSuccess(`Business "${record.businessName}" expired and paused.`);
+        await fetchRealData();
+      }
+    } catch {
+      setActionError('Failed to expire business.');
     } finally {
       setProcessingId(null);
       setTimeout(() => setActionSuccess(null), 4000);
@@ -386,7 +535,7 @@ export const AdminPayments: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-extrabold text-white tracking-tight">
-              UPI Manual Payments & Subscriptions
+              UPI Manual Payments & Timer Management
             </h1>
             <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
               <Activity className="w-3 h-3 animate-pulse" />
@@ -394,17 +543,25 @@ export const AdminPayments: React.FC = () => {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Verify customer UTR reference numbers, approve plans with 1-click, or manually grant access to any business.
+            Dynamic UPI engine: change UPI ID, verify UTR, start 1-month timers, and manage service expirations.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setShowEditUpiModal(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-bold transition-all shadow-sm"
+          >
+            <QrCode className="w-4 h-4" />
+            <span>Change Official UPI ID</span>
+          </button>
+
           <button
             onClick={() => setShowManualModal(true)}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-bold transition-all shadow-lg shadow-amber-500/20"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Activate Any Business Manually</span>
+            <span>+ Activate Any Business</span>
           </button>
 
           <button
@@ -416,6 +573,35 @@ export const AdminPayments: React.FC = () => {
             <span>Refresh</span>
           </button>
         </div>
+      </div>
+
+      {/* Active UPI ID Announcement Card */}
+      <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-slate-900 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center font-bold shrink-0">
+            <QrCode className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-400">
+                Active QR Code UPI Target
+              </span>
+              <span className="text-xs font-bold text-white font-mono bg-slate-950 px-2.5 py-0.5 rounded-lg border border-slate-700">
+                {settings.upi_id}
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 mt-0.5">
+              Payee Name: <strong className="text-white">{settings.payee_name}</strong> | All QR codes generated for customers will pay to this UPI ID.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => setShowEditUpiModal(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold transition-all shrink-0"
+        >
+          <Edit2 className="w-3.5 h-3.5" />
+          <span>Edit UPI ID</span>
+        </button>
       </div>
 
       {actionSuccess && (
@@ -460,13 +646,15 @@ export const AdminPayments: React.FC = () => {
               <span className="text-xs font-bold text-amber-300 animate-pulse">Action Required</span>
             )}
           </div>
-          <p className="text-[11px] text-slate-500">Awaiting Super Admin bank check</p>
+          <p className="text-[11px] text-slate-500">Awaiting Super Admin verification</p>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-1">
-          <span className="text-[10px] font-bold uppercase text-slate-400">Active Paid Businesses</span>
-          <p className="text-3xl font-black text-white">{capturedPayments.length}</p>
-          <p className="text-[11px] text-slate-500">Businesses with running subscriptions</p>
+          <span className="text-[10px] font-bold uppercase text-slate-400">Active Paid Subscriptions</span>
+          <p className="text-3xl font-black text-white">
+            {capturedPayments.filter((p) => !p.isExpired).length}
+          </p>
+          <p className="text-[11px] text-slate-500">Timers currently running</p>
         </div>
       </div>
 
@@ -482,7 +670,7 @@ export const AdminPayments: React.FC = () => {
                 Pending Manual UPI Payment Requests
               </h2>
               <p className="text-xs text-slate-400">
-                Customers who paid via UPI and submitted their 12-digit UTR number for approval.
+                Customers who paid via UPI and submitted their 12-digit UTR number. Click "Approve & Start 1-Month Timer" to resume their services.
               </p>
             </div>
           </div>
@@ -509,7 +697,7 @@ export const AdminPayments: React.FC = () => {
                   <th className="py-3 px-4">Amount</th>
                   <th className="py-3 px-4">Customer UTR</th>
                   <th className="py-3 px-4">Submitted At</th>
-                  <th className="py-3 px-4 text-right">Verification Action</th>
+                  <th className="py-3 px-4 text-right">Verification & Timer Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -580,9 +768,9 @@ export const AdminPayments: React.FC = () => {
                           {processingId === item.businessId ? (
                             <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                           ) : (
-                            <Check className="w-3.5 h-3.5" />
+                            <Play className="w-3.5 h-3.5" />
                           )}
-                          <span>Approve & Activate</span>
+                          <span>Approve & Start 1-Mo Timer</span>
                         </button>
 
                         {/* Reject Button */}
@@ -604,15 +792,15 @@ export const AdminPayments: React.FC = () => {
         )}
       </div>
 
-      {/* SECTION 2: Verified & Captured Subscriptions History */}
+      {/* SECTION 2: Verified & Active Subscriptions with Validity Timers */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl space-y-4 p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
           <div>
             <h2 className="text-base font-bold text-white">
-              Verified Payments & Active Subscriptions
+              Subscriptions & 1-Month Validity Timers
             </h2>
             <p className="text-xs text-slate-400">
-              All successfully verified manual payments and active customer accounts.
+              Live timers for all businesses. When timer reaches 0, services and QR code automatically stop until renewal.
             </p>
           </div>
 
@@ -635,10 +823,10 @@ export const AdminPayments: React.FC = () => {
                 <th className="py-3 px-4">Business & Customer</th>
                 <th className="py-3 px-4">Plan Name</th>
                 <th className="py-3 px-4">Amount</th>
-                <th className="py-3 px-4">Payment Method</th>
                 <th className="py-3 px-4">Reference / UTR</th>
+                <th className="py-3 px-4">Validity Timer</th>
                 <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Timestamp</th>
+                <th className="py-3 px-4 text-right">Super Admin Timer Controls</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
@@ -653,9 +841,9 @@ export const AdminPayments: React.FC = () => {
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-500 space-y-2">
                     <Clock className="w-8 h-8 mx-auto text-slate-600" />
-                    <p className="font-bold text-slate-300">No Verified Payments Yet</p>
+                    <p className="font-bold text-slate-300">No Active Subscriptions Yet</p>
                     <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                      When customers submit a manual payment or you activate a business, verified records will appear here.
+                      When customers submit a manual payment or you activate a business, verified records and countdown timers will appear here.
                     </p>
                   </td>
                 </tr>
@@ -677,23 +865,79 @@ export const AdminPayments: React.FC = () => {
                       ₹{(pay.amountPaise / 100).toFixed(0)}
                     </td>
 
-                    <td className="py-4 px-4 text-[11px] text-slate-300">
-                      {pay.method}
-                    </td>
-
                     <td className="py-4 px-4 font-mono text-[11px] text-amber-300">
                       {pay.utr}
                     </td>
 
+                    {/* Timer Cell */}
                     <td className="py-4 px-4">
-                      <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold flex items-center gap-1 w-fit">
-                        <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                        Captured
-                      </span>
+                      {pay.isExpired ? (
+                        <span className="px-2.5 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 text-[10px] font-black uppercase">
+                          Expired (Services Paused)
+                        </span>
+                      ) : (
+                        <div className="space-y-0.5">
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold inline-flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-emerald-400" />
+                            <span>{pay.daysRemaining} Days Left</span>
+                          </span>
+                          {pay.expiresAt && (
+                            <p className="text-[10px] text-slate-500 font-mono">
+                              Until {new Date(pay.expiresAt).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </td>
 
-                    <td className="py-4 px-4 text-right font-mono text-[11px] text-slate-500">
-                      {pay.date}
+                    <td className="py-4 px-4">
+                      {pay.isExpired ? (
+                        <span className="px-2.5 py-0.5 rounded-full bg-red-950 text-red-400 border border-red-800 text-[10px] font-bold">
+                          Inactive
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
+                          Active
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Timer Actions */}
+                    <td className="py-4 px-4 text-right">
+                      {pay.businessId ? (
+                        <div className="inline-flex items-center gap-1.5 justify-end">
+                          <button
+                            onClick={() => handleExtendValidity(pay, 30)}
+                            disabled={processingId === pay.businessId}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold transition-colors"
+                            title="Add 1 Month (30 Days)"
+                          >
+                            +30 Days
+                          </button>
+
+                          <button
+                            onClick={() => handleExtendValidity(pay, 7)}
+                            disabled={processingId === pay.businessId}
+                            className="px-2.5 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 text-[10px] font-bold transition-colors"
+                            title="Add 7 Days Free Trial"
+                          >
+                            +7 Days
+                          </button>
+
+                          {!pay.isExpired && (
+                            <button
+                              onClick={() => handleExpireImmediately(pay)}
+                              disabled={processingId === pay.businessId}
+                              className="px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 text-[10px] font-bold transition-colors"
+                              title="Expire & Stop Services Immediately"
+                            >
+                              Pause Now
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-500 text-[11px] font-mono">Gateway Mandate</span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -703,7 +947,81 @@ export const AdminPayments: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL: Direct Manual Business Activation */}
+      {/* MODAL 1: Quick UPI Change Modal */}
+      {showEditUpiModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl p-6 sm:p-8 space-y-5 text-white relative">
+            <button
+              onClick={() => setShowEditUpiModal(false)}
+              className="absolute top-5 right-5 p-1 rounded-full text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-full border border-amber-400/20">
+                Change UPI Target
+              </span>
+              <h3 className="text-xl font-black text-white">
+                Update Official UPI ID
+              </h3>
+              <p className="text-xs text-slate-400">
+                Enter any new UPI ID. All customer QR codes across the website will immediately point to this UPI ID.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveUpiQuick} className="space-y-4 pt-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  New UPI ID *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newUpiId}
+                  onChange={(e) => setNewUpiId(e.target.value.trim())}
+                  placeholder="e.g. 9931782577@ybl or badal@paytm"
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Payee Account Holder Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newPayeeName}
+                  onChange={(e) => setNewPayeeName(e.target.value)}
+                  placeholder="e.g. Badal Sarkar"
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingUpi}
+                className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
+              >
+                {savingUpi ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Updating across servers...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Save & Update QR Code Live</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: Direct Manual Business Activation */}
       {showManualModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="max-w-md w-full bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl p-6 sm:p-8 space-y-5 text-white relative">
@@ -722,7 +1040,7 @@ export const AdminPayments: React.FC = () => {
                 Manually Activate Business Plan
               </h3>
               <p className="text-xs text-slate-400">
-                Grant instant plan access to any registered business without payment gateway.
+                Grant instant plan access and start timer for any registered business.
               </p>
             </div>
 
@@ -769,7 +1087,7 @@ export const AdminPayments: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Duration *
+                    Timer Duration *
                   </label>
                   <select
                     value={manualDurationDays}
@@ -806,12 +1124,12 @@ export const AdminPayments: React.FC = () => {
                 {manualSubmitting ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Activating Business...</span>
+                    <span>Activating Business & Starting Timer...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    <span>Grant Plan Access Now</span>
+                    <span>Grant Plan Access & Start Timer</span>
                   </>
                 )}
               </button>

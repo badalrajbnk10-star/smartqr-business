@@ -21,9 +21,15 @@ import { useBusiness } from '../../context/BusinessContext';
 export const DashboardOverview: React.FC = () => {
   const { currentBusiness, trialRemainingTime, subscription, activePlan } = useBusiness();
 
-  const isTrial = subscription?.status === 'trialing';
-  const isSuspended = currentBusiness?.status === 'suspended' || 
-    (currentBusiness?.status !== 'active' && subscription?.status !== 'active' && trialRemainingTime.isExpired);
+  const pendingPayment = (currentBusiness?.opening_hours as any)?._pending_payment;
+  const isPending = subscription?.status === 'pending' || pendingPayment?.status === 'pending';
+  const isPaidActive =
+    (subscription?.status === 'active' || (currentBusiness?.opening_hours as any)?._subscription?.status === 'active') &&
+    !trialRemainingTime.isExpired;
+  const isExpired =
+    trialRemainingTime.isExpired || currentBusiness?.status === 'expired' || subscription?.status === 'expired';
+  const isSuspended = currentBusiness?.status === 'suspended';
+  const isTrial = !isPaidActive && !isPending && !isExpired && !isSuspended && subscription?.status === 'trialing';
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -105,19 +111,19 @@ export const DashboardOverview: React.FC = () => {
         </div>
       )}
 
-      {/* Trial Countdown or Plan Status Card */}
-      {isTrial && !trialRemainingTime.isExpired ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {/* Plan Validity Countdown / Expiration Warning Card */}
+      {isPending ? (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center shrink-0">
-              <Clock className="w-5 h-5 animate-pulse" />
+              <Clock className="w-5 h-5 animate-spin" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-amber-900">
-                24-Hour Free Trial in Progress ({trialRemainingTime.hours} Hours {trialRemainingTime.minutes} Minutes Remaining)
+                Payment Verification in Progress (UTR: {pendingPayment?.utr})
               </h3>
               <p className="text-xs text-amber-700">
-                Authorize your UPI AutoPay mandate before the trial ends to keep your public QR landing page active without interruption.
+                Admin is verifying your transaction. Your 1-month plan will be activated within a few minutes.
               </p>
             </div>
           </div>
@@ -125,39 +131,79 @@ export const DashboardOverview: React.FC = () => {
             to="/dashboard/subscription"
             className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs shrink-0 shadow-sm transition-colors"
           >
-            Authorize UPI AutoPay (₹99/mo)
+            View Payment Details
           </Link>
         </div>
-      ) : isSuspended ? (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      ) : isPaidActive ? (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center shrink-0">
-              <AlertCircle className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-5 h-5 text-emerald-600" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-red-900">Public QR Page Suspended</h3>
-              <p className="text-xs text-red-700">
-                Your free trial or billing period has expired. Re-activate your subscription to resume your public business profile.
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-emerald-950">
+                  {activePlan?.name || 'Professional'} Plan Active
+                </h3>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black tracking-wider uppercase">
+                  1-Month Timer Running
+                </span>
+              </div>
+              <p className="text-xs text-emerald-700 font-medium mt-0.5">
+                Time Remaining: <strong className="font-bold">{trialRemainingTime.days} Days, {trialRemainingTime.hours} Hours, {trialRemainingTime.minutes} Mins, {trialRemainingTime.seconds} Secs</strong>
               </p>
             </div>
           </div>
           <Link
             to="/dashboard/subscription"
-            className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-xs shrink-0 shadow-sm transition-colors"
+            className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-xs shrink-0 shadow-sm transition-colors"
           >
-            Re-activate Now
+            Billing & Invoices
+          </Link>
+        </div>
+      ) : isExpired || isSuspended ? (
+        <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md animate-pulse">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-6 h-6 text-red-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-red-950">
+                ⚠️ Plan Validity Expired — Public QR Services Paused
+              </h3>
+              <p className="text-xs text-red-800 leading-relaxed">
+                Your 1-month subscription validity has ended. Customer QR code scans are paused. Scan UPI QR to renew your plan and resume all services instantly.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/dashboard/subscription"
+            className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black text-xs shrink-0 shadow-lg shadow-red-600/30 transition-all flex items-center gap-1.5"
+          >
+            <span>Pay & Renew via UPI</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>
       ) : (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between">
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            <span className="text-xs font-semibold text-emerald-800">
-              Subscription Active: <strong>{activePlan?.name || 'Professional'} Plan</strong> (Recurring AutoPay Enabled)
-            </span>
+            <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+              <Clock className="w-5 h-5 animate-pulse text-blue-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-blue-950">
+                24-Hour Free Trial ({trialRemainingTime.hours}h {trialRemainingTime.minutes}m Left)
+              </h3>
+              <p className="text-xs text-blue-700">
+                Choose a monthly plan and pay via UPI QR to keep your QR profile running 24/7 without interruption.
+              </p>
+            </div>
           </div>
-          <Link to="/dashboard/subscription" className="text-xs font-bold text-emerald-700 hover:underline">
-            Manage Billing
+          <Link
+            to="/dashboard/subscription"
+            className="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs shrink-0 shadow-sm transition-colors"
+          >
+            Upgrade via UPI QR (₹99)
           </Link>
         </div>
       )}
