@@ -22,6 +22,7 @@ interface DirectPhotoUploadProps {
   format?: 'image/jpeg' | 'image/webp' | 'image/png';
   placeholderText?: string;
   initialAspectRatio?: number; // 1 for square, 16/9 for banner, 0 for free
+  lockAspectRatio?: boolean;
 }
 
 export const DirectPhotoUpload: React.FC<DirectPhotoUploadProps> = ({
@@ -34,6 +35,7 @@ export const DirectPhotoUpload: React.FC<DirectPhotoUploadProps> = ({
   format = 'image/jpeg',
   placeholderText = 'Select Photo from Device / Camera',
   initialAspectRatio = 1,
+  lockAspectRatio = true,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -138,7 +140,9 @@ export const DirectPhotoUpload: React.FC<DirectPhotoUploadProps> = ({
 
           {value ? (
             <div className="relative group rounded-2xl border-2 border-slate-200 overflow-hidden bg-slate-50 p-2.5 flex items-center gap-4">
-              <div className="w-20 h-20 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200 flex items-center justify-center relative">
+              <div className={`rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200 flex items-center justify-center relative ${
+                initialAspectRatio === 16 / 9 ? 'w-28 h-16' : 'w-20 h-20'
+              }`}>
                 <img
                   src={value}
                   alt="Selected Preview"
@@ -147,12 +151,12 @@ export const DirectPhotoUpload: React.FC<DirectPhotoUploadProps> = ({
               </div>
 
               <div className="flex-1 min-w-0 space-y-1">
-                <div className="flex items-center gap-1 text-xs font-bold text-emerald-700">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Photo Ready (Cropped & Optimized)</span>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Size Fixed ({initialAspectRatio === 1 ? 'Square 1:1' : initialAspectRatio === 16 / 9 ? 'Banner 16:9' : 'Standard'})</span>
                 </div>
                 <p className="text-[11px] text-slate-500 truncate">
-                  High quality image ready for digital profile & QR
+                  Optimized & auto-fitted to {label}
                 </p>
                 <div className="flex items-center gap-1.5 pt-1 flex-wrap">
                   {/* Crop / Adjust Button */}
@@ -162,7 +166,7 @@ export const DirectPhotoUpload: React.FC<DirectPhotoUploadProps> = ({
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors shadow-xs"
                   >
                     <CropIcon className="w-3 h-3" />
-                    <span>Crop / Adjust</span>
+                    <span>Adjust Crop & Fit</span>
                   </button>
 
                   {/* Change Photo Button */}
@@ -218,12 +222,12 @@ export const DirectPhotoUpload: React.FC<DirectPhotoUploadProps> = ({
                       {placeholderText}
                     </p>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      {aspectHint} • Includes Photo Crop Tool
+                      {aspectHint}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="px-3 py-1 rounded-full bg-brand-600 text-white text-[11px] font-bold shadow-sm">
-                      📁 Choose Photo & Crop
+                      📁 Auto-Fix to {initialAspectRatio === 1 ? '1:1 Square' : initialAspectRatio === 16 / 9 ? '16:9 Banner' : 'Preset Size'}
                     </span>
                   </div>
                 </div>
@@ -246,7 +250,9 @@ export const DirectPhotoUpload: React.FC<DirectPhotoUploadProps> = ({
         onCropComplete={handleCropComplete}
         onCancel={() => setCropModalOpen(false)}
         initialAspectRatio={initialAspectRatio}
-        title={`Crop & Adjust ${label}`}
+        lockAspectRatio={lockAspectRatio}
+        title={`Auto-Fix Size: ${label}`}
+        subtitle={`Automatically centered & fixed to ${initialAspectRatio === 1 ? '1:1 Square' : initialAspectRatio === 16 / 9 ? '16:9 Banner' : 'required'} dimensions`}
       />
     </div>
   );

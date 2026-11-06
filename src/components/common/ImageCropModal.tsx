@@ -8,11 +8,12 @@ import {
   X,
   Maximize2,
   Square,
-  Sparkles,
+  Lock,
   Move,
   RefreshCw,
   Circle,
-  HelpCircle
+  CheckCircle2,
+  Sliders
 } from 'lucide-react';
 
 interface ImageCropModalProps {
@@ -21,7 +22,9 @@ interface ImageCropModalProps {
   onCropComplete: (croppedDataUrl: string) => void;
   onCancel: () => void;
   initialAspectRatio?: number; // 1 for 1:1 square, 16/9 for banner, 4/3, 0 for free
+  lockAspectRatio?: boolean; // When true, locks to this ratio and hides conflicting selectors
   title?: string;
+  subtitle?: string;
 }
 
 export const ImageCropModal: React.FC<ImageCropModalProps> = ({
@@ -30,7 +33,9 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
   onCropComplete,
   onCancel,
   initialAspectRatio = 1,
-  title = 'Crop & Position Photo'
+  lockAspectRatio = true,
+  title = 'Crop & Position Photo',
+  subtitle
 }) => {
   const [aspectRatio, setAspectRatio] = useState<number>(initialAspectRatio);
   const [zoom, setZoom] = useState<number>(1);
@@ -40,7 +45,8 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [initialPinchDist, setInitialPinchDist] = useState<number | null>(null);
   const [initialPinchZoom, setInitialPinchZoom] = useState<number>(1);
-  const [showCircleGuide, setShowCircleGuide] = useState<boolean>(true);
+  const [showCircleGuide, setShowCircleGuide] = useState<boolean>(aspectRatio === 1);
+  const [fitMode, setFitMode] = useState<'fill' | 'fit'>('fill');
 
   // Natural image dimensions
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
@@ -50,36 +56,46 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
   const cropBoxRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
-  // Crop box fixed dimensions for viewport
-  // Responsive: standard 280px for square on mobile, 300px on desktop
-  const cropBoxWidth = 280;
+  // Responsive crop box dimensions
+  // For 1:1 square: 280x280 px
+  // For 16:9 banner: 340x191 px (wider, clear view)
+  // For 4:3 standard: 300x225 px
+  const cropBoxWidth =
+    aspectRatio === 16 / 9
+      ? 340
+      : aspectRatio === 4 / 3
+      ? 300
+      : 280;
+
   const cropBoxHeight =
     aspectRatio === 1
       ? 280
       : aspectRatio === 16 / 9
-      ? Math.round(280 * (9 / 16)) // 158px
+      ? Math.round(cropBoxWidth * (9 / 16)) // 191px
       : aspectRatio === 4 / 3
-      ? Math.round(280 * (3 / 4)) // 210px
+      ? Math.round(cropBoxWidth * (3 / 4)) // 225px
       : naturalSize.width > 0
-      ? Math.round(280 * (naturalSize.height / naturalSize.width))
+      ? Math.round(cropBoxWidth * (naturalSize.height / naturalSize.width))
       : 280;
 
   // Compute base scale to cover or fit the crop box nicely
   const getBaseScale = useCallback(() => {
     if (!naturalSize.width || !naturalSize.height) return 1;
-    // Default: Cover the crop box so no empty gaps
     const scaleX = cropBoxWidth / naturalSize.width;
     const scaleY = cropBoxHeight / naturalSize.height;
-    return Math.max(scaleX, scaleY);
-  }, [cropBoxWidth, cropBoxHeight, naturalSize]);
+    // Default: 'fill' covers the crop box; 'fit' contains entire image with white padding
+    return fitMode === 'fit' ? Math.min(scaleX, scaleY) : Math.max(scaleX, scaleY);
+  }, [cropBoxWidth, cropBoxHeight, naturalSize, fitMode]);
 
-  // Reset state when modal opens or image changes
+  // Reset state whenever modal opens or initialAspectRatio changes
   useEffect(() => {
     if (isOpen && imageSrc) {
       setZoom(1);
       setRotation(0);
       setPan({ x: 0, y: 0 });
       setAspectRatio(initialAspectRatio);
+      setFitMode('fill');
+      setShowCircleGuide(initialAspectRatio === 1);
       setImageLoaded(false);
 
       const img = new Image();
@@ -126,7 +142,6 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
         y: e.touches[0].clientY - pan.y,
       });
     } else if (e.touches.length === 2) {
-      // Pinch to zoom
       setIsDragging(false);
       const dist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
@@ -149,7 +164,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
         e.touches[0].clientY - e.touches[1].clientY
       );
       const factor = currentDist / initialPinchDist;
-      setZoom(Math.min(4, Math.max(0.5, initialPinchZoom * factor)));
+      setZoom(Math.min(4, Math.max(0.4, initialPinchZoom * factor)));
     }
   };
 
@@ -162,25 +177,24 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY * -0.002;
-    setZoom((prev) => Math.min(4, Math.max(0.5, prev + delta)));
+    setZoom((prev) => Math.min(4, Math.max(0.4, prev + delta)));
   };
 
-  // Quick action presets
-  const handleFit = () => {
-    if (!naturalSize.width || !naturalSize.height) return;
-    const scaleX = cropBoxWidth / naturalSize.width;
-    const scaleY = cropBoxHeight / naturalSize.height;
-    const fitScale = Math.min(scaleX, scaleY);
-    setZoom(fitScale / baseScale);
+  // Quick preset fit handlers
+  const handleFillMode = () => {
+    setFitMode('fill');
+    setZoom(1);
     setPan({ x: 0, y: 0 });
   };
 
-  const handleFill = () => {
+  const handleFitMode = () => {
+    setFitMode('fit');
     setZoom(1);
     setPan({ x: 0, y: 0 });
   };
 
   const handleReset = () => {
+    setFitMode('fill');
     setZoom(1);
     setRotation(0);
     setPan({ x: 0, y: 0 });
@@ -188,6 +202,14 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
 
   const handleRotate = () => {
     setRotation((prev) => (prev + 90) % 360);
+  };
+
+  // Descriptive label for the locked size
+  const getFixedSizeLabel = () => {
+    if (aspectRatio === 1) return 'Fixed Size: 1:1 Square (600 × 600 px for Logo & QR Center)';
+    if (aspectRatio === 16 / 9) return 'Fixed Size: 16:9 Landscape (1200 × 675 px for Cover Banner)';
+    if (aspectRatio === 4 / 3) return 'Fixed Size: 4:3 Standard (800 × 600 px for Photo)';
+    return 'Free Aspect Ratio';
   };
 
   // Generate cropped output canvas with 100% WYSIWYG fidelity
@@ -205,11 +227,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
       return;
     }
 
-    // Determine target output resolution
-    // Square 1:1 -> 600x600 (sharp, fast, lightweight ~45KB)
-    // 16:9 Banner -> 1200x675
-    // 4:3 -> 800x600
-    // Free -> up to 1000px proportional
+    // Exact output dimensions
     let targetWidth = 600;
     let targetHeight = 600;
 
@@ -230,34 +248,30 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
     canvas.width = targetWidth;
     canvas.height = targetHeight;
 
-    // 1. Fill clean white background (prevents transparent PNGs turning black in JPEGs)
+    // 1. Fill clean white background
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, targetWidth, targetHeight);
 
-    // 2. High quality image smoothing
+    // 2. High quality smoothing
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
     // 3. Coordinate transform from crop box screen space to canvas space
-    // Scale factor between output canvas and screen crop box
     const canvasScale = targetWidth / cropBoxWidth;
 
     ctx.save();
-    // Move canvas origin to center of output image
+    // Center canvas origin
     ctx.translate(targetWidth / 2, targetHeight / 2);
 
-    // Rotate about the center
     if (rotation !== 0) {
       ctx.rotate((rotation * Math.PI) / 180);
     }
 
-    // Canvas dimensions for the rendered image
     const canvasImgW = displayWidth * canvasScale;
     const canvasImgH = displayHeight * canvasScale;
     const canvasPanX = pan.x * canvasScale;
     const canvasPanY = pan.y * canvasScale;
 
-    // Draw the image centered with pan offset
     ctx.drawImage(
       img,
       -canvasImgW / 2 + canvasPanX,
@@ -288,7 +302,9 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm sm:text-base font-bold text-white">{title}</h3>
-              <p className="text-[11px] text-slate-400">Drag photo to position inside crop frame</p>
+              <p className="text-[11px] text-slate-400">
+                {subtitle || 'Auto-scaled & fitted to the exact required size'}
+              </p>
             </div>
           </div>
           <button
@@ -299,55 +315,56 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
           </button>
         </div>
 
-        {/* Aspect Ratio Selector */}
-        <div className="flex items-center justify-between gap-1.5 bg-slate-950/60 p-1.5 rounded-2xl border border-slate-800 text-xs">
-          <button
-            type="button"
-            onClick={() => setAspectRatio(1)}
-            className={`flex-1 py-1.5 px-2 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all text-xs ${
-              aspectRatio === 1
-                ? 'bg-brand-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <Square className="w-3.5 h-3.5" />
-            <span>Square 1:1</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setAspectRatio(16 / 9)}
-            className={`flex-1 py-1.5 px-2 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all text-xs ${
-              aspectRatio === 16 / 9
-                ? 'bg-brand-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-            <span>Banner 16:9</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setAspectRatio(4 / 3)}
-            className={`flex-1 py-1.5 px-2 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all text-xs ${
-              aspectRatio === 4 / 3
-                ? 'bg-brand-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <span>4:3 Standard</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setAspectRatio(0)}
-            className={`flex-1 py-1.5 px-2 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all text-xs ${
-              aspectRatio === 0
-                ? 'bg-brand-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <span>Original</span>
-          </button>
-        </div>
+        {/* Fixed Size Notification Bar or Ratio Selector */}
+        {lockAspectRatio ? (
+          <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-brand-500/10 border border-brand-500/30 text-xs">
+            <div className="flex items-center gap-2 text-brand-300 font-bold">
+              <Lock className="w-3.5 h-3.5 text-brand-400 shrink-0" />
+              <span>{getFixedSizeLabel()}</span>
+            </div>
+            <span className="text-[10px] uppercase font-black tracking-wider text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-500/30">
+              Auto Fixed
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-1.5 bg-slate-950/60 p-1.5 rounded-2xl border border-slate-800 text-xs">
+            <button
+              type="button"
+              onClick={() => setAspectRatio(1)}
+              className={`flex-1 py-1.5 px-2 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all text-xs ${
+                aspectRatio === 1
+                  ? 'bg-brand-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <Square className="w-3.5 h-3.5" />
+              <span>Square 1:1</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAspectRatio(16 / 9)}
+              className={`flex-1 py-1.5 px-2 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all text-xs ${
+                aspectRatio === 16 / 9
+                  ? 'bg-brand-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span>Banner 16:9</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAspectRatio(4 / 3)}
+              className={`flex-1 py-1.5 px-2 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all text-xs ${
+                aspectRatio === 4 / 3
+                  ? 'bg-brand-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <span>4:3 Standard</span>
+            </button>
+          </div>
+        )}
 
         {/* Cropping Viewport */}
         <div
@@ -433,13 +450,44 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
           )}
         </div>
 
-        {/* Zoom & Adjustment Controls */}
+        {/* Fit Presets & Zoom Controls */}
         <div className="space-y-2.5 bg-slate-800/60 p-3 sm:p-3.5 rounded-2xl border border-slate-800 text-xs">
-          {/* Zoom Controls */}
+          {/* Fit Preset Buttons */}
+          <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-700/60">
+            <span className="text-[11px] font-semibold text-slate-400">Positioning:</span>
+            <div className="flex items-center gap-1.5 flex-1 justify-end">
+              <button
+                type="button"
+                onClick={handleFillMode}
+                className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${
+                  fitMode === 'fill'
+                    ? 'bg-brand-600 text-white shadow-xs'
+                    : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                }`}
+                title="Scale to fill entire frame without borders"
+              >
+                <span>Fill Entire Frame</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleFitMode}
+                className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${
+                  fitMode === 'fit'
+                    ? 'bg-brand-600 text-white shadow-xs'
+                    : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                }`}
+                title="Fit whole photo with white padding (keeps text uncut)"
+              >
+                <span>Fit Whole Photo</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Zoom Slider */}
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.15).toFixed(2))))}
+              onClick={() => setZoom((z) => Math.max(0.4, Number((z - 0.15).toFixed(2))))}
               className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
               title="Zoom Out"
             >
@@ -448,7 +496,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
             <div className="flex-1 flex items-center gap-2">
               <input
                 type="range"
-                min="0.5"
+                min="0.4"
                 max="3.5"
                 step="0.05"
                 value={zoom}
@@ -469,32 +517,16 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
             </button>
           </div>
 
-          {/* Action Tools: Fit, Fill, Rotate, Reset */}
+          {/* Action Tools: Rotate, Reset */}
           <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-700/60 text-[11px]">
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={handleFit}
-                className="px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium transition-colors"
-              >
-                Fit Photo
-              </button>
-              <button
-                type="button"
-                onClick={handleFill}
-                className="px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium transition-colors"
-              >
-                Fill Frame
-              </button>
-              <button
-                type="button"
-                onClick={handleRotate}
-                className="px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium flex items-center gap-1 transition-colors"
-              >
-                <RotateCw className="w-3 h-3 text-cyan-400" />
-                <span>Rotate 90°</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleRotate}
+              className="px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium flex items-center gap-1.5 transition-colors"
+            >
+              <RotateCw className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Rotate 90° Clockwise</span>
+            </button>
 
             <button
               type="button"
@@ -502,7 +534,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
               className="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
             >
               <RefreshCw className="w-3 h-3" />
-              <span>Reset</span>
+              <span>Reset Position</span>
             </button>
           </div>
         </div>
@@ -522,7 +554,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
             className="px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-brand-600/30 transition-all"
           >
             <Check className="w-4 h-4 text-emerald-300" />
-            <span>Apply & Save Crop</span>
+            <span>Confirm & Fix Photo Size</span>
           </button>
         </div>
       </div>
